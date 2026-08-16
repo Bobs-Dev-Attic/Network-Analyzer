@@ -14,15 +14,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,6 +76,12 @@ fun WifiScreen(
         if (ok) onScan()
     }
 
+    // Auto-scan when the tab opens with permission already granted, so the user
+    // doesn't have to guess that they need to tap Scan first.
+    LaunchedEffect(granted) {
+        if (granted && state.aps.isEmpty() && !state.scanning) onScan()
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -100,6 +109,17 @@ fun WifiScreen(
 
         state.current?.let { CurrentCard(it) }
         if (state.channelLoads.isNotEmpty()) CongestionCard(state.channelLoads)
+
+        if (state.scanning && state.aps.isEmpty()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                Text("Scanning nearby networks…",
+                    style = MaterialTheme.typography.bodyMedium)
+            }
+        }
 
         state.message?.let { msg ->
             Card(Modifier.fillMaxWidth()) {

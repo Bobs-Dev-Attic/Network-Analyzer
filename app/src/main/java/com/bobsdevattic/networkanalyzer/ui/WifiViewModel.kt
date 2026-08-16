@@ -5,23 +5,32 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.location.LocationManager
 import android.net.wifi.WifiManager
+import android.os.Build
+import android.provider.Settings
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.bobsdevattic.networkanalyzer.network.ChannelLoad
 import com.bobsdevattic.networkanalyzer.network.WifiScanner
 import com.bobsdevattic.networkanalyzer.network.WifiState
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 /**
  * Surfaces nearby WiFi APs, channel congestion, and the current association.
  *
- * Listens for SCAN_RESULTS_AVAILABLE so fresh scans update the UI as they land;
- * [scan] also requests a new scan (subject to Android's scan throttling) and
- * immediately reads the cached results. Call [refresh] once the scan permission
- * has been granted.
+ * Scanning is asynchronous: [scan] requests a fresh scan and shows any cached
+ * results immediately, but keeps a "scanning" state until either the
+ * SCAN_RESULTS_AVAILABLE broadcast lands (fresh results) or a fallback timeout
+ * elapses. Only then does it finalize an empty result — and the message it shows
+ * is version-aware (Location-services off, scan throttled, or genuinely empty)
+ * so the user knows what to fix.
  */
 class WifiViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -30,8 +39,10 @@ class WifiViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(WifiState())
     val state: StateFlow<WifiState> = _state.asStateFlow()
 
+    private var finalizeJob: Job? = null
+
     private val receiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) = load()
+        override fun onReceive(context: Context?, intent: Intent?) = load(finalize = true)
     }
 
     init {
@@ -43,18 +54,25 @@ class WifiViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    /** Trigger a fresh scan and load whatever results are already cached. */
+    /** Request a fresh scan; show cached results now, finalize after the scan lands. */
     fun scan() {
-        _state.value = _state.value.copy(scanning = true)
-        scanner.requestScan()
-        load()
+        _state.value = _state.value.copy(scanning = true, message = null)
+        val started = scanner.requestScan()
+        load(finalize = false)
+
+        finalizeJob?.cancel()
+        finalizeJob = viewModelScope.launch {
+            delay(SCAN_WAIT_MS)
+            load(finalize = true, scanStarted = started)
+        }
     }
 
-    /** Re-read results (e.g. after the permission was just granted). */
-    fun refresh() = load()
+    /** Re-read/scan (e.g. once the permission was just granted). */
+    fun refresh() = scan()
 
-    private fun load() {
+    private fun load(finalize: Boolean, scanStarted: Boolean = true) {
         if (!scanner.isWifiEnabled) {
+            finalizeJob?.cancel()
             _state.value = WifiState(scanning = false, message = "WiFi is turned off.")
             return
         }
@@ -63,26 +81,69 @@ class WifiViewModel(app: Application) : AndroidViewModel(app) {
         val aps = scanner.accessPoints(current?.bssid)
             .sortedByDescending { it.rssiDbm }
 
-        val loads = aps
-            .filter { it.channel > 0 }
-            .groupBy { it.band to it.channel }
-            .map { (key, list) -> ChannelLoad(key.first, key.second, list.size) }
-            .sortedWith(compareByDescending<ChannelLoad> { it.count }.thenBy { it.channel })
+        if (aps.isNotEmpty()) {
+            finalizeJob?.cancel()
+            val loads = aps
+                .filter { it.channel > 0 }
+                .groupBy { it.band to it.channel }
+                .map { (key, list) -> ChannelLoad(key.first, key.second, list.size) }
+                .sortedWith(compareByDescending<ChannelLoad> { it.count }.thenBy { it.channel })
+            _state.value = WifiState(
+                scanning = false,
+                current = current,
+                aps = aps,
+                channelLoads = loads,
+                message = null,
+            )
+            return
+        }
+
+        // No APs yet.
+        if (!finalize) {
+            // Keep waiting for the scan to complete; show the current link meanwhile.
+            _state.value = WifiState(scanning = true, current = current)
+            return
+        }
 
         _state.value = WifiState(
             scanning = false,
             current = current,
-            aps = aps,
-            channelLoads = loads,
-            message = if (aps.isEmpty()) {
-                "No networks found. On Android 12 and below, location services must " +
-                    "be ON for scan results, and scans are rate-limited."
-            } else null,
+            message = emptyMessage(scanStarted),
         )
     }
 
+    private fun emptyMessage(scanStarted: Boolean): String = when {
+        !isLocationEnabled() ->
+            "No networks found. Turn on system Location (Settings → Location) — most " +
+                "phones require it for WiFi scans even when the app permission is " +
+                "granted — then tap Scan."
+        !scanStarted ->
+            "Android rate-limited the scan. Wait about 10 seconds and tap Scan again."
+        else ->
+            "No networks found. Check that WiFi is on and this app has the " +
+                "Nearby-devices (or Location) permission, then tap Scan."
+    }
+
+    /** Whether the system Location master switch is on (gates scan results on many devices). */
+    private fun isLocationEnabled(): Boolean = runCatching {
+        val ctx = getApplication<Application>()
+        val lm = ctx.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            lm.isLocationEnabled
+        } else {
+            @Suppress("DEPRECATION")
+            val mode = Settings.Secure.getInt(
+                ctx.contentResolver,
+                Settings.Secure.LOCATION_MODE,
+                Settings.Secure.LOCATION_MODE_OFF,
+            )
+            mode != Settings.Secure.LOCATION_MODE_OFF
+        }
+    }.getOrDefault(true)
+
     override fun onCleared() {
         super.onCleared()
+        finalizeJob?.cancel()
         runCatching { getApplication<Application>().unregisterReceiver(receiver) }
     }
 }
