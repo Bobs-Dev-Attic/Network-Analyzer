@@ -300,6 +300,25 @@ your file manager/browser — approve it, then tap **Install**.
 - **Firewall/isolation.** Some managed switches isolate ports (AP/client
   isolation) — use a plain unmanaged switch for the test.
 
+### Common runtime errors (crashes & exceptions)
+
+Read the stack trace in **Logcat** (Android Studio → **View → Tool Windows →
+Logcat**, filter by the app package). The usual ones:
+
+| Symptom / exception | Cause | Fix |
+|---|---|---|
+| **`SecurityException` on the WiFi tab** (scan results / getScanResults) | Scan permission not granted, or running on a build that still requires location | Grant the permission when prompted; on Android ≤12 also turn on system **Location services**. |
+| **Download fails with `CleartextNotPermittedException`** | You changed the Download URL to an `http://` link — Android blocks cleartext by default (API 28+) | Use an `https://` URL, or add a `network_security_config` allowing cleartext for your test host. |
+| **`registerReceiver … RECEIVER_EXPORTED/NOT_EXPORTED required`** (Android 14) | A broadcast receiver registered without an export flag | Already handled via `ContextCompat.registerReceiver(..., RECEIVER_NOT_EXPORTED)`; keep that flag if you touch `WifiViewModel`. |
+| **`NetworkOnMainThreadException`** | Network I/O ran on the UI thread | All built-in I/O is on `Dispatchers.IO`; if you add calls, keep them off the main thread. |
+| **`SocketTimeoutException` / "Connection refused"** on Speed or Cable | Target unreachable or no server listening | Expected and shown as a message, not a crash — check reachability and that the server is started. |
+| **Counters/speed show nothing, no crash** | sysfs layout differs on some OEM builds | Reads fail soft to "unavailable"; the feature still works where the files exist. |
+| **App keeps sampling after you leave it** | The Statistics poller runs while the app is in memory | Expected for now (lifecycle-gating is a later refinement); close the app to stop it. |
+| **Link tab doesn't refresh after unplug/replug** | The network-change callback missed an event | Tap **Refresh** to force a re-read. |
+
+If a crash isn't listed here, grab the Logcat stack trace — the top
+`Caused by:` line and the first frame in this app's package point to the cause.
+
 ## Open decisions
 
 - [x] Root optional-enhanced mode — **out for v1** (unrooted-only).
