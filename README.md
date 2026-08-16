@@ -101,8 +101,13 @@ Live RX/TX throughput meter + rolling sparkline + packet/error/dropped counters,
 sampled once per second from `/sys/class/net/<iface>/statistics/`. Surfaced on a
 second "Statistics" tab.
 
-**M3 — Discovery & inventory**
-Ping sweep + connect probes → host list with MAC, vendor (OUI), hostname.
+**M3 — Discovery & inventory** ✅ _implemented_
+On-demand subnet sweep on a third "Hosts" tab: TCP-connect probes across the
+wired subnet (connect success *or* refusal proves liveness), then read
+`/proc/net/arp` for MACs — so hosts that drop probes are still found via the ARP
+entry their SYN triggered. MAC → vendor via an OUI starter set; best-effort
+reverse-DNS hostnames; open ports captured to seed M4. All sockets bound to the
+Ethernet network. Subnets larger than /22 are refused as too big to sweep.
 
 **M4 — Port scan**
 Per-host TCP-connect scan + service identification.
@@ -159,4 +164,5 @@ and lets you bind app traffic to the interface.
 - [x] Root optional-enhanced mode — **out for v1** (unrooted-only).
 - [ ] Bundle native binaries (nmap/iperf3) vs. pure Kotlin — APK size vs. power.
 - [ ] Minimum Android API level.
-- [ ] OUI database: bundle vs. fetch/update.
+- [ ] OUI database: bundle vs. fetch/update. _(M3 ships a small high-confidence
+      starter set in `OuiLookup`; replace with the full IEEE registry.)_
