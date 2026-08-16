@@ -30,6 +30,8 @@ import com.bobsdevattic.networkanalyzer.ui.SpeedQualityScreen
 import com.bobsdevattic.networkanalyzer.ui.SpeedQualityViewModel
 import com.bobsdevattic.networkanalyzer.ui.StatisticsScreen
 import com.bobsdevattic.networkanalyzer.ui.StatisticsViewModel
+import com.bobsdevattic.networkanalyzer.ui.WifiScreen
+import com.bobsdevattic.networkanalyzer.ui.WifiViewModel
 import com.bobsdevattic.networkanalyzer.ui.theme.NetworkAnalyzerTheme
 
 class MainActivity : ComponentActivity() {
@@ -50,6 +52,7 @@ private enum class Screen(val label: String) {
     Hosts("Hosts"),
     Ports("Ports"),
     Speed("Speed"),
+    Wifi("WiFi"),
 }
 
 @Composable
@@ -59,12 +62,14 @@ private fun AnalyzerApp() {
     val discoveryVm: DiscoveryViewModel = viewModel()
     val portScanVm: PortScanViewModel = viewModel()
     val speedVm: SpeedQualityViewModel = viewModel()
+    val wifiVm: WifiViewModel = viewModel()
 
     val info by interfaceVm.state.collectAsStateWithLifecycle()
     val stats by statsVm.state.collectAsStateWithLifecycle()
     val discovery by discoveryVm.state.collectAsStateWithLifecycle()
     val portScan by portScanVm.state.collectAsStateWithLifecycle()
     val speed by speedVm.state.collectAsStateWithLifecycle()
+    val wifi by wifiVm.state.collectAsStateWithLifecycle()
 
     // M2 polls continuously while the app is in memory; lifecycle-gating can come
     // later. Kick it off once on first composition.
@@ -112,6 +117,10 @@ private fun AnalyzerApp() {
                     defaultDownloadUrl = speedVm.defaultDownloadUrl,
                     onRun = speedVm::run,
                     onCancel = speedVm::cancel,
+                )
+                Screen.Wifi -> WifiScreen(
+                    state = wifi,
+                    onScan = wifiVm::scan,
                 )
             }
         }

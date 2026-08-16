@@ -124,8 +124,13 @@ resolution timing via the Ethernet resolver, and HTTP download throughput
 (Cloudflare endpoint by default, editable; time/size-capped). iperf3 upload
 remains a stretch (needs a server → folds into M7).
 
-**M6 — WiFi analysis**
-AP scan, channel congestion view, current-link quality (phone radio).
+**M6 — WiFi analysis** ✅ _implemented_
+A "WiFi" tab using the phone's own radio (independent of the USB link): nearby
+APs with SSID/BSSID/RSSI+bars/channel/band/width/security, a channel-congestion
+bar view, and the current association (link speed, channel, band). Gated behind
+the runtime scan permission — `NEARBY_WIFI_DEVICES` (neverForLocation) on API
+33+, `ACCESS_FINE_LOCATION` below — with a fresh-results broadcast receiver and
+a note about scan throttling / location-services on older Android.
 
 **M7 — Two-phone cable qualification** _(stretch; builds on M2 + M5)_
 A cooperative pass/fail quality test for a cable run using two phones + two
