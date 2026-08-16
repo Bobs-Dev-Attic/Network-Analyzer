@@ -180,7 +180,8 @@ and lets you bind app traffic to the interface.
 ## Install on your phone
 
 There's no prebuilt APK yet — you build it once, then it installs like any app.
-Easiest path is Android Studio; a command-line path is included too.
+Easiest path is Android Studio; a command-line path is included too. For a
+condensed version of the steps below, see **[install.md](install.md)**.
 
 ### Option A — Android Studio (recommended)
 
