@@ -230,6 +230,76 @@ your file manager/browser — approve it, then tap **Install**.
 - The **Speed** download test needs real internet through the drop; **Cable**
   (M7) needs a second phone + adapter and IPv4 on both ends (via a switch/router).
 
+## Troubleshooting
+
+### Build issues (first build in Android Studio)
+
+- **Gradle sync fails / `gradlew: not found`.** The Gradle wrapper jar isn't
+  committed (it's a binary). Open the project in Android Studio, which generates
+  it on first sync, or run `gradle wrapper` once with a local Gradle install.
+- **"Unsupported Java version" / Gradle needs JDK 17.** Set **Settings → Build,
+  Execution, Deployment → Build Tools → Gradle → Gradle JDK** to a JDK 17. AGP
+  8.5 requires it.
+- **SDK 34 not installed.** Android Studio → **SDK Manager** → install **Android
+  14 (API 34)** platform + build-tools, then re-sync.
+- **A Compose call flags an experimental API** (e.g. `FlowRow`,
+  `ExperimentalLayoutApi`). The affected file should carry the matching
+  `@OptIn(...)`; if a new lint error appears after a library bump, add the opt-in
+  it names to that composable.
+- **Dependency/version resolution errors.** Versions are pinned in
+  `app/build.gradle.kts` (AGP 8.5, Kotlin 1.9.24, Compose BOM 2024.06). If your
+  installed AGP differs, let Android Studio's **AGP Upgrade Assistant** align
+  them rather than editing by hand.
+
+> This app hasn't been device-validated yet, so the first build may surface a
+> small import or opt-in fix. That's expected — the structure is sound.
+
+### The adapter doesn't show up (Link tab stays "No adapter")
+
+- **Confirm USB host/OTG.** Not every port/phone supports it; try the phone's
+  primary USB-C port and, if needed, an OTG-verified cable.
+- **Chipset support.** Realtek (RTL8153/8156) and ASIX (AX88179) enumerate on
+  Android; off-brand chips may not. If a known-good adapter works and another
+  doesn't, the other's chipset is the problem.
+- **Live cable + link LED.** Make sure the drop is live and the adapter's link
+  light is on. No carrier = no Ethernet transport = "No adapter".
+- **Re-seat / replug.** Android brings the interface up on attach; unplug and
+  replug the adapter, then tap **Refresh**.
+
+### Values read "unavailable"
+
+- **MAC address** is withheld from unrooted apps on most Android 6+ builds — this
+  is expected, not a bug.
+- **Speed / duplex** come from `/sys` and are hidden on some locked-down builds;
+  the interface still works, only the readout is missing.
+
+### WiFi tab shows no networks
+
+- **Grant the permission** when prompted (Nearby devices on Android 13+, Location
+  below). Without it, scan results are empty.
+- **Android 12 and below:** system **location services** must be ON for scan
+  results to return, even with the app permission granted.
+- **Scan throttling** (Android 9+) rate-limits scans to a few per couple of
+  minutes; wait a moment between scans.
+
+### Speed tab: download test fails
+
+- The download needs **real internet reachability** through the wired drop. On an
+  isolated/lab LAN it will fail with a clear message — latency and DNS (to the
+  gateway/local resolver) still work.
+- If your network blocks the default endpoint, edit the **Download URL** field to
+  any large file reachable on your network.
+
+### Cable tab (M7): client can't connect
+
+- **Both phones need an IPv4 on the wired link.** A direct phone-to-phone cable
+  has no DHCP, so connect both through a **switch/router** that hands out
+  addresses; the server shows its IP once it has one.
+- **Enter the exact IP** the server tab displays, and keep both phones on the
+  **same wired segment**.
+- **Firewall/isolation.** Some managed switches isolate ports (AP/client
+  isolation) — use a plain unmanaged switch for the test.
+
 ## Open decisions
 
 - [x] Root optional-enhanced mode — **out for v1** (unrooted-only).
