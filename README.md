@@ -81,9 +81,11 @@ The app should surface these as "requires dedicated hardware — out of scope."
 
 ## MVP milestones
 
-**M1 — Interface & link info**
+**M1 — Interface & link info** ✅ _in progress_
 Detect the USB Ethernet interface, show link speed/duplex/MAC and IP config,
 bind app traffic to it. Warn on unsupported/absent adapter.
+_Unrooted-only for v1 (decided): public ConnectivityManager APIs + world-readable
+sysfs; no raw sockets or privileged calls._
 
 **M2 — Statistics**
 Live throughput + packet/error counters graphed from `/sys/class/net`.
@@ -102,9 +104,31 @@ AP scan, channel congestion view, current-link quality (phone radio).
 
 ---
 
+## Building
+
+Android Studio (Koala or newer) — open the project root and run the `app`
+configuration on a device. Or from the CLI once the Gradle wrapper jar is
+present (`gradle wrapper` or Android Studio generates it):
+
+```
+./gradlew :app:assembleDebug     # build the APK
+./gradlew :app:installDebug      # install on a connected device
+```
+
+**Requirements:** JDK 17, Android SDK 34, a physical device with USB host
+support (the emulator has no USB-C Ethernet path). Toolchain: AGP 8.5, Kotlin
+1.9.24, Compose (BOM 2024.06), min SDK 26.
+
+To exercise M1: connect a USB-C Ethernet adapter to a live drop, launch the app,
+and the **Wired Link** screen shows interface, speed/duplex/MTU/MAC, IP config,
+and lets you bind app traffic to the interface.
+
+> Note: some values (notably hardware MAC, and PHY speed/duplex on locked-down
+> builds) are withheld from unrooted apps and will read "unavailable" — expected.
+
 ## Open decisions
 
-- [ ] Root optional-enhanced mode — in or out for v1?
+- [x] Root optional-enhanced mode — **out for v1** (unrooted-only).
 - [ ] Bundle native binaries (nmap/iperf3) vs. pure Kotlin — APK size vs. power.
 - [ ] Minimum Android API level.
 - [ ] OUI database: bundle vs. fetch/update.
