@@ -32,6 +32,10 @@ class EthernetInterfaceManager(context: Context) {
                 ?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true
         }
 
+    /** Kernel interface name of the current Ethernet link (e.g. "eth0"), or null. */
+    fun currentInterfaceName(): String? =
+        findEthernetNetwork()?.let { cm.getLinkProperties(it)?.interfaceName }
+
     /**
      * Inspect the current wired link. Returns [AdapterStatus.ABSENT] when no
      * Ethernet transport is present (adapter unplugged, unsupported chipset, or

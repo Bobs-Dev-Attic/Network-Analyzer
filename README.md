@@ -87,8 +87,10 @@ bind app traffic to it. Warn on unsupported/absent adapter.
 _Unrooted-only for v1 (decided): public ConnectivityManager APIs + world-readable
 sysfs; no raw sockets or privileged calls._
 
-**M2 — Statistics**
-Live throughput + packet/error counters graphed from `/sys/class/net`.
+**M2 — Statistics** ✅ _implemented_
+Live RX/TX throughput meter + rolling sparkline + packet/error/dropped counters,
+sampled once per second from `/sys/class/net/<iface>/statistics/`. Surfaced on a
+second "Statistics" tab.
 
 **M3 — Discovery & inventory**
 Ping sweep + connect probes → host list with MAC, vendor (OUI), hostname.
