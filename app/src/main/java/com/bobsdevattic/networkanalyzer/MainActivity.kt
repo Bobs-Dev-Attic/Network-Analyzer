@@ -8,8 +8,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -17,6 +17,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bobsdevattic.networkanalyzer.ui.DiscoveryScreen
@@ -25,6 +26,8 @@ import com.bobsdevattic.networkanalyzer.ui.InterfaceScreen
 import com.bobsdevattic.networkanalyzer.ui.InterfaceViewModel
 import com.bobsdevattic.networkanalyzer.ui.PortScanScreen
 import com.bobsdevattic.networkanalyzer.ui.PortScanViewModel
+import com.bobsdevattic.networkanalyzer.ui.SpeedQualityScreen
+import com.bobsdevattic.networkanalyzer.ui.SpeedQualityViewModel
 import com.bobsdevattic.networkanalyzer.ui.StatisticsScreen
 import com.bobsdevattic.networkanalyzer.ui.StatisticsViewModel
 import com.bobsdevattic.networkanalyzer.ui.theme.NetworkAnalyzerTheme
@@ -46,6 +49,7 @@ private enum class Screen(val label: String) {
     Stats("Statistics"),
     Hosts("Hosts"),
     Ports("Ports"),
+    Speed("Speed"),
 }
 
 @Composable
@@ -54,11 +58,13 @@ private fun AnalyzerApp() {
     val statsVm: StatisticsViewModel = viewModel()
     val discoveryVm: DiscoveryViewModel = viewModel()
     val portScanVm: PortScanViewModel = viewModel()
+    val speedVm: SpeedQualityViewModel = viewModel()
 
     val info by interfaceVm.state.collectAsStateWithLifecycle()
     val stats by statsVm.state.collectAsStateWithLifecycle()
     val discovery by discoveryVm.state.collectAsStateWithLifecycle()
     val portScan by portScanVm.state.collectAsStateWithLifecycle()
+    val speed by speedVm.state.collectAsStateWithLifecycle()
 
     // M2 polls continuously while the app is in memory; lifecycle-gating can come
     // later. Kick it off once on first composition.
@@ -69,7 +75,7 @@ private fun AnalyzerApp() {
 
     Scaffold { innerPadding ->
         Column(Modifier.fillMaxSize().padding(innerPadding)) {
-            TabRow(selectedTabIndex = selected) {
+            ScrollableTabRow(selectedTabIndex = selected, edgePadding = 0.dp) {
                 screens.forEachIndexed { index, screen ->
                     Tab(
                         selected = selected == index,
@@ -100,6 +106,12 @@ private fun AnalyzerApp() {
                     commonPortsSpec = portScanVm.commonPortsSpec(),
                     onScan = portScanVm::scan,
                     onCancel = portScanVm::cancel,
+                )
+                Screen.Speed -> SpeedQualityScreen(
+                    state = speed,
+                    defaultDownloadUrl = speedVm.defaultDownloadUrl,
+                    onRun = speedVm::run,
+                    onCancel = speedVm::cancel,
                 )
             }
         }

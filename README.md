@@ -116,8 +116,13 @@ grabs any greeting banner (SSH/FTP/SMTP…) without sending a payload. Configura
 ports spec ("22,80,443" or "1-1024", capped at 4096) with Common/1-1024/Web
 quick-fills. "Scan ports" on a discovered host hands the IP straight to this tab.
 
-**M5 — Speed & quality**
-Latency/jitter/loss, DNS timing, HTTP throughput; iperf3 as stretch.
+**M5 — Speed & quality** ✅ _implemented_
+A "Speed" tab that runs three tests in sequence over the wired link, all bound to
+the Ethernet `Network`: TCP-ping latency/jitter/loss (ICMP isn't reliable
+unrooted, so RTT is timed from TCP handshakes — a refusal counts too), DNS
+resolution timing via the Ethernet resolver, and HTTP download throughput
+(Cloudflare endpoint by default, editable; time/size-capped). iperf3 upload
+remains a stretch (needs a server → folds into M7).
 
 **M6 — WiFi analysis**
 AP scan, channel congestion view, current-link quality (phone radio).
