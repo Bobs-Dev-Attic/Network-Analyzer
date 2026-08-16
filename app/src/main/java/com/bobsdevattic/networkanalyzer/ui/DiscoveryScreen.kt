@@ -17,6 +17,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +36,7 @@ fun DiscoveryScreen(
     state: DiscoveryState,
     onScan: () -> Unit,
     onCancel: () -> Unit,
+    onScanPorts: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -87,14 +89,14 @@ fun DiscoveryScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(state.hosts, key = { it.ip }) { host ->
-                HostCard(host)
+                HostCard(host, onScanPorts = onScanPorts)
             }
         }
     }
 }
 
 @Composable
-private fun HostCard(host: DiscoveredHost) {
+private fun HostCard(host: DiscoveredHost, onScanPorts: (String) -> Unit) {
     Card(
         Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
@@ -122,6 +124,13 @@ private fun HostCard(host: DiscoveredHost) {
             host.vendor?.let { Field("Vendor", it) }
             if (host.openPorts.isNotEmpty()) {
                 Field("Open ports", host.openPorts.joinToString(", "), mono = true)
+            }
+
+            if (!host.isSelf) {
+                TextButton(
+                    onClick = { onScanPorts(host.ip) },
+                    modifier = Modifier.align(Alignment.End),
+                ) { Text("Scan ports") }
             }
         }
     }

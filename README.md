@@ -109,8 +109,12 @@ entry their SYN triggered. MAC → vendor via an OUI starter set; best-effort
 reverse-DNS hostnames; open ports captured to seed M4. All sockets bound to the
 Ethernet network. Subnets larger than /22 are refused as too big to sweep.
 
-**M4 — Port scan**
-Per-host TCP-connect scan + service identification.
+**M4 — Port scan** ✅ _implemented_
+Per-host TCP-connect scan on a "Ports" tab: classifies open/closed/filtered from
+connect outcomes, labels services from a well-known-port catalog, and passively
+grabs any greeting banner (SSH/FTP/SMTP…) without sending a payload. Configurable
+ports spec ("22,80,443" or "1-1024", capped at 4096) with Common/1-1024/Web
+quick-fills. "Scan ports" on a discovered host hands the IP straight to this tab.
 
 **M5 — Speed & quality**
 Latency/jitter/loss, DNS timing, HTTP throughput; iperf3 as stretch.
