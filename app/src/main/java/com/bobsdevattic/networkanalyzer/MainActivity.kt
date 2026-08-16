@@ -26,6 +26,8 @@ import com.bobsdevattic.networkanalyzer.ui.InterfaceScreen
 import com.bobsdevattic.networkanalyzer.ui.InterfaceViewModel
 import com.bobsdevattic.networkanalyzer.ui.PortScanScreen
 import com.bobsdevattic.networkanalyzer.ui.PortScanViewModel
+import com.bobsdevattic.networkanalyzer.ui.QualificationScreen
+import com.bobsdevattic.networkanalyzer.ui.QualificationViewModel
 import com.bobsdevattic.networkanalyzer.ui.SpeedQualityScreen
 import com.bobsdevattic.networkanalyzer.ui.SpeedQualityViewModel
 import com.bobsdevattic.networkanalyzer.ui.StatisticsScreen
@@ -53,6 +55,7 @@ private enum class Screen(val label: String) {
     Ports("Ports"),
     Speed("Speed"),
     Wifi("WiFi"),
+    Cable("Cable"),
 }
 
 @Composable
@@ -63,6 +66,7 @@ private fun AnalyzerApp() {
     val portScanVm: PortScanViewModel = viewModel()
     val speedVm: SpeedQualityViewModel = viewModel()
     val wifiVm: WifiViewModel = viewModel()
+    val qualVm: QualificationViewModel = viewModel()
 
     val info by interfaceVm.state.collectAsStateWithLifecycle()
     val stats by statsVm.state.collectAsStateWithLifecycle()
@@ -70,6 +74,7 @@ private fun AnalyzerApp() {
     val portScan by portScanVm.state.collectAsStateWithLifecycle()
     val speed by speedVm.state.collectAsStateWithLifecycle()
     val wifi by wifiVm.state.collectAsStateWithLifecycle()
+    val qual by qualVm.state.collectAsStateWithLifecycle()
 
     // M2 polls continuously while the app is in memory; lifecycle-gating can come
     // later. Kick it off once on first composition.
@@ -121,6 +126,14 @@ private fun AnalyzerApp() {
                 Screen.Wifi -> WifiScreen(
                     state = wifi,
                     onScan = wifiVm::scan,
+                )
+                Screen.Cable -> QualificationScreen(
+                    state = qual,
+                    onSetRole = qualVm::setRole,
+                    onStartServer = qualVm::startServer,
+                    onStopServer = qualVm::stopServer,
+                    onRunClient = qualVm::runClient,
+                    onCancelClient = qualVm::cancelClient,
                 )
             }
         }

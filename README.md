@@ -90,7 +90,7 @@ no per-pin fault location.
 
 ## MVP milestones
 
-**M1 — Interface & link info** ✅ _in progress_
+**M1 — Interface & link info** ✅ _implemented_
 Detect the USB Ethernet interface, show link speed/duplex/MAC and IP config,
 bind app traffic to it. Warn on unsupported/absent adapter.
 _Unrooted-only for v1 (decided): public ConnectivityManager APIs + world-readable
@@ -132,10 +132,14 @@ the runtime scan permission — `NEARBY_WIFI_DEVICES` (neverForLocation) on API
 33+, `ACCESS_FINE_LOCATION` below — with a fresh-results broadcast receiver and
 a note about scan throttling / location-services on older Android.
 
-**M7 — Two-phone cable qualification** _(stretch; builds on M2 + M5)_
-A cooperative pass/fail quality test for a cable run using two phones + two
-adapters — one end runs an iperf-style server, the other the client, both
-watching link rate and error/drop/retrain counters.
+**M7 — Two-phone cable qualification** ✅ _implemented (stretch; builds on M2 + M5)_
+A "Cable" tab with Server/Client roles. One phone listens; the other runs a timed
+download then upload over the cable under test, measures throughput, and reads
+error/drop counter deltas on *both* ends (the server returns its own in the
+upload ack). Verdict = PASS / MARGINAL / FAULT from link rate + error counters
+(throughput is shown but never fails a run — it's capped by USB generation, not
+the cable). Needs IPv4 on both ends (e.g. via a switch/router); plain TCP bound
+to the Ethernet interface, unrooted.
 
 _Delivers a **qualifier**, not a wiremap or certifier:_
 - ✅ Confirms all 4 pairs carry a clean gigabit link (gigabit needs all 4)
@@ -172,6 +176,59 @@ and lets you bind app traffic to the interface.
 
 > Note: some values (notably hardware MAC, and PHY speed/duplex on locked-down
 > builds) are withheld from unrooted apps and will read "unavailable" — expected.
+
+## Install on your phone
+
+There's no prebuilt APK yet — you build it once, then it installs like any app.
+Easiest path is Android Studio; a command-line path is included too.
+
+### Option A — Android Studio (recommended)
+
+1. Install **Android Studio** (Koala or newer) on your computer.
+2. **File → Open** and select this project's root folder. Let Gradle sync (it
+   downloads the SDK/toolchain and generates the Gradle wrapper automatically).
+3. On the phone, enable **Developer options** (Settings → About phone → tap
+   **Build number** 7 times) and turn on **USB debugging** (Settings → System →
+   Developer options).
+4. Plug the phone into the computer by USB; approve the "Allow USB debugging"
+   prompt on the phone.
+5. Pick your phone in the device dropdown and press **Run ▶**. Android Studio
+   builds, installs, and launches the app.
+
+### Option B — command line (adb)
+
+Requires JDK 17 + Android SDK (with `adb` on your PATH), and USB debugging on
+(steps 3–4 above).
+
+```
+./gradlew :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+If `./gradlew` is missing, run `gradle wrapper` once (or open the project in
+Android Studio, which creates it).
+
+### Option C — sideload the APK directly
+
+If someone hands you the built `app-debug.apk` (e.g. from Option B), copy it to
+the phone and open it. You'll be asked to allow **"Install unknown apps"** for
+your file manager/browser — approve it, then tap **Install**.
+
+### Using it once installed
+
+1. Plug the **USB-C Ethernet adapter** into the phone (a USB-C OTG-capable port).
+2. Connect a **live Ethernet cable** to the adapter.
+3. Open **Network Analyzer**. The **Link** tab should show the interface and its
+   speed within a second or two — that also confirms your adapter's chipset is
+   supported. If nothing appears, the adapter isn't being recognized.
+4. Explore the tabs: **Statistics**, **Hosts**, **Ports**, **Speed**, **WiFi**,
+   **Cable**. The **WiFi** tab will ask for a one-time permission.
+
+**Notes**
+- Needs a phone with **USB host / OTG** support (most modern Android phones).
+- The app is **unrooted** — no root or special setup required.
+- The **Speed** download test needs real internet through the drop; **Cable**
+  (M7) needs a second phone + adapter and IPv4 on both ends (via a switch/router).
 
 ## Open decisions
 
