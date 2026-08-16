@@ -29,10 +29,19 @@ Deliberately **tabled** — these require Time Domain Reflectometry (TDR) at the
 PHY level, whose vendor registers aren't exposed to unrooted Android apps by the
 USB-Ethernet drivers. They need dedicated cable-tester hardware.
 
-- Cable length estimation
-- Open / short / miswired pair detection
+- Cable length estimation (needs nanosecond timing; impossible over USB + Android
+  userspace, where scheduling/USB jitter is milliseconds — ~10,000× too coarse)
+- Per-pin wiremap: open / short / miswired / swapped-pair fault location
+  (1000BASE-T PHYs auto-correct MDIX, pair-swap, polarity and skew, silently
+  hiding exactly these faults; per-pair diagnostic registers aren't exposed)
 
 The app should surface these as "requires dedicated hardware — out of scope."
+
+**Partial exception — cable _qualification_ (see M7).** What two cooperating
+endpoints _can_ do is a pass/fail quality check under real traffic (confirm a
+clean 4-pair gigabit link, push bidirectional throughput, watch error/retrain
+counters). That's a qualifier, not a wiremap tester or a certifier — no length,
+no per-pin fault location.
 
 ---
 
@@ -103,6 +112,23 @@ Latency/jitter/loss, DNS timing, HTTP throughput; iperf3 as stretch.
 
 **M6 — WiFi analysis**
 AP scan, channel congestion view, current-link quality (phone radio).
+
+**M7 — Two-phone cable qualification** _(stretch; builds on M2 + M5)_
+A cooperative pass/fail quality test for a cable run using two phones + two
+adapters — one end runs an iperf-style server, the other the client, both
+watching link rate and error/drop/retrain counters.
+
+_Delivers a **qualifier**, not a wiremap or certifier:_
+- ✅ Confirms all 4 pairs carry a clean gigabit link (gigabit needs all 4)
+- ✅ Flags 2-pair-only faults (caps at 100 Mbps → a pair is open/broken)
+- ✅ Measures real bidirectional throughput end-to-end (controlled far end)
+- ✅ Flags marginal / damaged / over-length runs via errors + retrains under load
+- ❌ No length in meters (nanosecond timing impossible over USB + userspace)
+- ❌ No per-pin fault location (PHY auto-corrects MDIX/pair-swap/polarity/skew)
+
+Verdict UI must state these limits plainly so it's never mistaken for a
+wiremap tester. Requires a lightweight pairing/handshake between the two app
+instances over the wired link.
 
 ---
 
