@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      INTERNET / ACCESS_NETWORK_STATE: required to enumerate networks, read
+      LinkProperties, and bind sockets to the Ethernet interface.
+      Cable/wiring diagnostics are out of scope; no root permission is requested.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
+      WiFi analysis (M6) uses the phone's own radio.
+      - ACCESS_WIFI_STATE / CHANGE_WIFI_STATE: read scan results, request scans.
+      - NEARBY_WIFI_DEVICES (API 33+, neverForLocation): list APs without location.
+      - ACCESS_FINE_LOCATION (API <= 32 only): required by older Android to return
+        scan results; capped so 33+ relies on NEARBY_WIFI_DEVICES instead.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="32" />
+
+    <!-- USB host mode is how the phone talks to the adapter; declared as optional
+         so the app still installs on devices for future WiFi-only features. -->
+    <uses-feature
+        android:name="android.hardware.usb.host"
+        android:required="false" />
+
+    <application
+        android:allowBackup="true"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.NetworkAnalyzer">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.NetworkAnalyzer">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>
