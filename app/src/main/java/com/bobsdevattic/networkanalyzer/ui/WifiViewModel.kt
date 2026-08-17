@@ -142,9 +142,15 @@ class WifiViewModel(app: Application) : AndroidViewModel(app) {
         if (enabled) startLive() else liveJob?.cancel()
     }
 
-    /** Change how often the live reading samples; restarts the loop if running. */
+    /**
+     * Change how often the live reading samples; restarts the loop if running.
+     *
+     * The history is cleared because the chart maps x position to time using the
+     * *current* interval. Keeping samples taken at the old rate would place them at
+     * ages the axis labels misreport — a point drawn at "-30s" could be minutes old.
+     */
     fun setInterval(ms: Long) {
-        _state.update { it.copy(intervalMs = ms) }
+        _state.update { it.copy(intervalMs = ms, rssiHistory = emptyList()) }
         if (_state.value.liveEnabled) startLive()
     }
 

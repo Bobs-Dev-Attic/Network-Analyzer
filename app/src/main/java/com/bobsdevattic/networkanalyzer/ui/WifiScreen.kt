@@ -44,9 +44,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -56,6 +60,12 @@ import com.bobsdevattic.networkanalyzer.network.ChannelLoad
 import com.bobsdevattic.networkanalyzer.network.CurrentWifi
 import com.bobsdevattic.networkanalyzer.network.WifiAp
 import com.bobsdevattic.networkanalyzer.network.WifiState
+import com.bobsdevattic.networkanalyzer.ui.theme.BandChip
+import com.bobsdevattic.networkanalyzer.ui.theme.SignalBars
+import com.bobsdevattic.networkanalyzer.ui.theme.colors
+import com.bobsdevattic.networkanalyzer.ui.theme.statusColors
+import com.bobsdevattic.networkanalyzer.ui.theme.statusOfSignalBars
+import kotlin.math.abs
 
 /**
  * Scan permissions required on this API level. Location is the universal
@@ -289,11 +299,18 @@ private fun CurrentCard(
                 onToggle = { expanded = !expanded },
                 trailing = {
                     // Live-updating (when enabled) signal, always visible in the header.
-                    Text(
-                        "${signalGlyph(rssiBars(c.rssiDbm))}  ${c.rssiDbm} dBm",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontFamily = FontFamily.Monospace,
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        SignalBars(rssiBars(c.rssiDbm))
+                        Text(
+                            "${c.rssiDbm} dBm",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontFamily = FontFamily.Monospace,
+                            color = statusOfSignalBars(rssiBars(c.rssiDbm)).colors().fg,
+                        )
+                    }
                 },
             )
 
@@ -324,7 +341,9 @@ private fun CurrentCard(
                         }
                     }
                     if (rssiHistory.size >= 2) {
-                        Box(Modifier.fillMaxWidth().height(80.dp)) { RssiSparkline(rssiHistory) }
+                        Box(Modifier.fillMaxWidth().height(140.dp)) {
+                            RssiChart(rssiHistory, intervalMs)
+                        }
                     } else {
                         Text("Sampling…", style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -335,27 +354,85 @@ private fun CurrentCard(
     }
 }
 
+/** Candidate x-axis tick steps, in seconds. */
+private val TICK_STEPS_SEC = listOf(5, 10, 15, 30, 60)
+
+/**
+ * Live RSSI trace on a labelled grid.
+ *
+ * The dBm range is fixed at -100..-30 rather than auto-scaled, so the frame stays put
+ * as the signal moves. Zone boundaries (-66, -77) are the same thresholds as
+ * `WifiAp.signalBars`, so the chart, the bars and the chip never disagree.
+ */
 @Composable
-private fun RssiSparkline(history: List<Int>) {
+private fun RssiChart(history: List<Int>, intervalMs: Long) {
+    val measurer = rememberTextMeasurer()
+    val grid = MaterialTheme.colorScheme.outlineVariant
+    val axis = MaterialTheme.colorScheme.outline
     val line = MaterialTheme.colorScheme.primary
-    val axis = MaterialTheme.colorScheme.outlineVariant
+    val labelStyle = MaterialTheme.typography.labelSmall
+        .copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val status = MaterialTheme.statusColors
+    val zoneGood = status.good.fg.copy(alpha = 0.08f)
+    val zoneWarn = status.warn.fg.copy(alpha = 0.08f)
+    val zoneBad = status.bad.fg.copy(alpha = 0.08f)
+
     Canvas(Modifier.fillMaxSize()) {
-        drawLine(axis, Offset(0f, size.height), Offset(size.width, size.height), 2f)
-        if (history.size < 2) return@Canvas
-        // Map dBm onto the canvas: -100 (bottom) .. -30 (top).
+        val left = 36.dp.toPx()
+        val bottom = 18.dp.toPx()
+        val plotW = size.width - left
+        val plotH = size.height - bottom
+        if (plotW <= 0f || plotH <= 0f || history.size < 2) return@Canvas
+
         val minD = -100f
         val maxD = -30f
-        fun y(dbm: Int): Float {
-            val frac = ((dbm.toFloat() - minD) / (maxD - minD)).coerceIn(0f, 1f)
-            return size.height - frac * size.height
+        fun y(dbm: Float): Float =
+            plotH - ((dbm - minD) / (maxD - minD)).coerceIn(0f, 1f) * plotH
+
+        // Strength zones behind the grid.
+        drawRect(zoneGood, Offset(left, y(maxD)), Size(plotW, y(-66f) - y(maxD)))
+        drawRect(zoneWarn, Offset(left, y(-66f)), Size(plotW, y(-77f) - y(-66f)))
+        drawRect(zoneBad, Offset(left, y(-77f)), Size(plotW, y(minD) - y(-77f)))
+
+        // Horizontal gridlines, labelled every 20 dB.
+        for (dbm in intArrayOf(-100, -80, -60, -40)) {
+            val gy = y(dbm.toFloat())
+            drawLine(grid, Offset(left, gy), Offset(size.width, gy), 1f)
+            val label = measurer.measure(AnnotatedString(dbm.toString()), labelStyle)
+            drawText(
+                label,
+                topLeft = Offset(left - label.size.width - 4.dp.toPx(), gy - label.size.height / 2f),
+            )
         }
-        val stepX = size.width / (history.size - 1)
-        var prev = Offset(0f, y(history[0]))
+
+        // Vertical gridlines, labelled by age. The step is picked so that every one of
+        // the four sampling intervals produces round numbers.
+        val spanSec = (history.size - 1) * intervalMs / 1000f
+        if (spanSec > 0f) {
+            val step = TICK_STEPS_SEC.minBy { abs(it - spanSec / 4f) }.toFloat()
+            var age = 0f
+            while (age <= spanSec) {
+                val x = left + plotW - (age / spanSec) * plotW
+                drawLine(grid, Offset(x, 0f), Offset(x, plotH), 1f)
+                val label = measurer.measure(AnnotatedString("${age.toInt()}s"), labelStyle)
+                val lx = (x - label.size.width / 2f)
+                    .coerceIn(left, (size.width - label.size.width).coerceAtLeast(left))
+                drawText(label, topLeft = Offset(lx, plotH + 3.dp.toPx()))
+                age += step
+            }
+        }
+
+        drawLine(axis, Offset(left, 0f), Offset(left, plotH), 2f)
+        drawLine(axis, Offset(left, plotH), Offset(size.width, plotH), 2f)
+
+        val stepX = plotW / (history.size - 1)
+        var prev = Offset(left, y(history[0].toFloat()))
         for (i in 1 until history.size) {
-            val cur = Offset(i * stepX, y(history[i]))
+            val cur = Offset(left + i * stepX, y(history[i].toFloat()))
             drawLine(line, prev, cur, strokeWidth = 3f)
             prev = cur
         }
+        drawCircle(line, radius = 3.dp.toPx(), center = prev)
     }
 }
 
@@ -432,14 +509,15 @@ private fun ApCard(ap: WifiAp) {
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),
                 )
-                Text(signalGlyph(ap.signalBars),
-                    style = MaterialTheme.typography.bodyMedium)
+                BandChip(ap.band)
+                SignalBars(ap.signalBars)
                 Text("${ap.rssiDbm} dBm", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    color = statusOfSignalBars(ap.signalBars).colors().fg)
             }
             InfoLine("BSSID", ap.bssid.ifBlank { "—" }, mono = true)
             val width = ap.widthMhz?.let { " · ${it}MHz" }.orEmpty()
-            InfoLine("Channel", "${ap.channel} · ${ap.band.label}$width")
+            // Band is carried by the chip above, so it isn't repeated here.
+            InfoLine("Channel", "${ap.channel}$width")
             InfoLine("Security", ap.security + if (ap.isCurrent) "  · connected" else "")
         }
     }
@@ -454,10 +532,4 @@ private fun InfoLine(label: String, value: String, mono: Boolean = false) {
         Text(value, style = MaterialTheme.typography.bodyMedium,
             fontFamily = if (mono) FontFamily.Monospace else FontFamily.Default)
     }
-}
-
-private fun signalGlyph(bars: Int): String {
-    val filled = "▮".repeat(bars)
-    val empty = "▯".repeat(4 - bars)
-    return filled + empty
 }

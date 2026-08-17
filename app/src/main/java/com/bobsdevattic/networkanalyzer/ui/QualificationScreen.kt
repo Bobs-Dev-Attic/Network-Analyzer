@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
@@ -30,6 +31,11 @@ import com.bobsdevattic.networkanalyzer.network.QualRole
 import com.bobsdevattic.networkanalyzer.network.QualResult
 import com.bobsdevattic.networkanalyzer.network.QualState
 import com.bobsdevattic.networkanalyzer.network.Verdict
+import com.bobsdevattic.networkanalyzer.ui.theme.Status
+import com.bobsdevattic.networkanalyzer.ui.theme.StatusChip
+import com.bobsdevattic.networkanalyzer.ui.theme.colors
+import com.bobsdevattic.networkanalyzer.ui.theme.statusOf
+import com.bobsdevattic.networkanalyzer.ui.theme.statusOfErrorCount
 
 /**
  * M7 screen: two-phone cable qualification. Pick SERVER on one phone and CLIENT
@@ -162,26 +168,28 @@ private fun ClientSection(
 
 @Composable
 private fun ResultCard(r: QualResult) {
-    val (label, color) = when (r.verdict) {
-        Verdict.PASS -> "PASS" to Color(0xFF2E7D32)
-        Verdict.MARGINAL -> "MARGINAL" to Color(0xFFF9A825)
-        Verdict.FAULT -> "FAULT" to Color(0xFFC62828)
-        Verdict.UNKNOWN -> "INCONCLUSIVE" to Color(0xFF616161)
+    val label = when (r.verdict) {
+        Verdict.PASS -> "PASS"
+        Verdict.MARGINAL -> "MARGINAL"
+        Verdict.FAULT -> "FAULT"
+        Verdict.UNKNOWN -> "INCONCLUSIVE"
     }
+    val status = statusOf(r.verdict)
 
     Card(
         Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(label, style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold, color = color)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StatusChip(label = label, status = status)
+            }
 
             Metric("Link speed", r.linkSpeedMbps?.let { "$it Mbps" } ?: "unavailable")
             Metric("Download", "%.0f Mbps".format(r.downloadMbps))
             Metric("Upload", "%.0f Mbps".format(r.uploadMbps))
-            Metric("RX errors", r.rxErrorsDelta.toString())
-            Metric("Drops", r.droppedDelta.toString())
+            Metric("RX errors", r.rxErrorsDelta.toString(), statusOfErrorCount(r.rxErrorsDelta))
+            Metric("Drops", r.droppedDelta.toString(), statusOfErrorCount(r.droppedDelta))
 
             r.reasons.forEach { reason ->
                 Text("• $reason", style = MaterialTheme.typography.bodySmall,
@@ -191,8 +199,9 @@ private fun ResultCard(r: QualResult) {
     }
 }
 
+/** [status] tints the value only; null leaves it in the default on-surface colour. */
 @Composable
-private fun Metric(label: String, value: String) {
+private fun Metric(label: String, value: String, status: Status? = null) {
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -200,6 +209,7 @@ private fun Metric(label: String, value: String) {
         Text(label, style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodyMedium,
-            fontFamily = FontFamily.Monospace)
+            fontFamily = FontFamily.Monospace,
+            color = status?.colors()?.fg ?: Color.Unspecified)
     }
 }

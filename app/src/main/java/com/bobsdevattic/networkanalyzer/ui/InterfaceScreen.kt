@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import com.bobsdevattic.networkanalyzer.data.AdapterStatus
 import com.bobsdevattic.networkanalyzer.data.EthernetInterfaceInfo
 import com.bobsdevattic.networkanalyzer.network.CurrentWifi
+import com.bobsdevattic.networkanalyzer.ui.theme.Status
+import com.bobsdevattic.networkanalyzer.ui.theme.StatusChip
 
 /**
  * M1 screen: shows the wired USB-C Ethernet link state and lets the user pin
@@ -45,10 +47,22 @@ fun InterfaceScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            text = "Wired Link",
-            style = MaterialTheme.typography.headlineSmall,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Wired Link",
+                style = MaterialTheme.typography.headlineSmall,
+            )
+            // ABSENT is neutral, not bad: an unplugged adapter is a normal state, and
+            // a red error chip would overstate it.
+            when (info.status) {
+                AdapterStatus.CONNECTED -> StatusChip("connected", Status.GOOD)
+                AdapterStatus.ABSENT -> StatusChip("no adapter", Status.NEUTRAL)
+            }
+        }
 
         when (info.status) {
             AdapterStatus.ABSENT -> AbsentCard()
