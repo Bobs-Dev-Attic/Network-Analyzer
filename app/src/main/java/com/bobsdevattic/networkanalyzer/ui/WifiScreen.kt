@@ -186,7 +186,7 @@ fun WifiScreen(
         }
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxWidth().weight(1f),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(state.aps, key = { it.bssid.ifBlank { it.ssid + it.channel } }) { ap ->
