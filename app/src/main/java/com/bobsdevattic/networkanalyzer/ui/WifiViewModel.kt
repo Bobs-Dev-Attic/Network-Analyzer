@@ -146,4 +146,9 @@ class WifiViewModel(app: Application) : AndroidViewModel(app) {
         finalizeJob?.cancel()
         runCatching { getApplication<Application>().unregisterReceiver(receiver) }
     }
+
+    private companion object {
+        /** Fallback wait for the async scan to complete before finalizing empty. */
+        const val SCAN_WAIT_MS = 6000L
+    }
 }
