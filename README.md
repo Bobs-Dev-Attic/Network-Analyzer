@@ -126,11 +126,14 @@ remains a stretch (needs a server → folds into M7).
 
 **M6 — WiFi analysis** ✅ _implemented_
 A "WiFi" tab using the phone's own radio (independent of the USB link): nearby
-APs with SSID/BSSID/RSSI+bars/channel/band/width/security, a channel-congestion
-bar view, and the current association (link speed, channel, band). Gated behind
-the runtime scan permission — `NEARBY_WIFI_DEVICES` (neverForLocation) on API
-33+, `ACCESS_FINE_LOCATION` below — with a fresh-results broadcast receiver and
-a note about scan throttling / location-services on older Android.
+APs with SSID/BSSID/RSSI+bars/channel/band/width/security, a collapsible
+channel-congestion view, and a collapsible current-association card. The
+Connected card also hosts a **live signal meter** — a toggle that polls the
+connected network's RSSI (via `connectionInfo`, which isn't scan-throttled) at a
+configurable interval (0.5–5 s) and plots a sparkline. Gated behind the runtime
+scan permission — `ACCESS_FINE_LOCATION` plus `NEARBY_WIFI_DEVICES` on API 33+
+(without `neverForLocation`, which returned empty results on Android 16) — with
+a broadcast receiver + result polling and version-aware empty-state messages.
 
 **M7 — Two-phone cable qualification** ✅ _implemented (stretch; builds on M2 + M5)_
 A "Cable" tab with Server/Client roles. One phone listens; the other runs a timed

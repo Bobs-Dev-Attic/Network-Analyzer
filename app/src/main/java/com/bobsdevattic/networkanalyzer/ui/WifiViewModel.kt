@@ -20,6 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -40,6 +41,7 @@ class WifiViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<WifiState> = _state.asStateFlow()
 
     private var finalizeJob: Job? = null
+    private var liveJob: Job? = null
 
     private val receiver = object : BroadcastReceiver() {
         // A completed scan (ours or the system's) — populate if it has results,
@@ -91,7 +93,10 @@ class WifiViewModel(app: Application) : AndroidViewModel(app) {
     private fun load(finalize: Boolean, scanStarted: Boolean = true) {
         if (!scanner.isWifiEnabled) {
             finalizeJob?.cancel()
-            _state.value = WifiState(scanning = false, message = "WiFi is turned off.")
+            _state.update {
+                it.copy(scanning = false, current = null, aps = emptyList(),
+                    channelLoads = emptyList(), message = "WiFi is turned off.")
+            }
             return
         }
 
@@ -106,28 +111,56 @@ class WifiViewModel(app: Application) : AndroidViewModel(app) {
                 .groupBy { it.band to it.channel }
                 .map { (key, list) -> ChannelLoad(key.first, key.second, list.size) }
                 .sortedWith(compareByDescending<ChannelLoad> { it.count }.thenBy { it.channel })
-            _state.value = WifiState(
-                scanning = false,
-                current = current,
-                aps = aps,
-                channelLoads = loads,
-                message = null,
-            )
+            _state.update {
+                it.copy(scanning = false, current = current, aps = aps,
+                    channelLoads = loads, message = null)
+            }
             return
         }
 
         // No APs yet.
         if (!finalize) {
             // Keep waiting for the scan to complete; show the current link meanwhile.
-            _state.value = WifiState(scanning = true, current = current)
+            _state.update { it.copy(scanning = true, current = current) }
             return
         }
 
-        _state.value = WifiState(
-            scanning = false,
-            current = current,
-            message = emptyMessage(scanStarted),
-        )
+        _state.update {
+            it.copy(scanning = false, current = current, aps = emptyList(),
+                channelLoads = emptyList(), message = emptyMessage(scanStarted))
+        }
+    }
+
+    // ---- Live signal meter (connected network) ----------------------------
+
+    /** Toggle the real-time signal reading for the connected network. */
+    fun setLiveEnabled(enabled: Boolean) {
+        _state.update {
+            it.copy(liveEnabled = enabled, rssiHistory = if (enabled) it.rssiHistory else emptyList())
+        }
+        if (enabled) startLive() else liveJob?.cancel()
+    }
+
+    /** Change how often the live reading samples; restarts the loop if running. */
+    fun setInterval(ms: Long) {
+        _state.update { it.copy(intervalMs = ms) }
+        if (_state.value.liveEnabled) startLive()
+    }
+
+    private fun startLive() {
+        liveJob?.cancel()
+        liveJob = viewModelScope.launch {
+            while (isActive) {
+                val current = scanner.current()
+                _state.update { st ->
+                    val history = if (current != null) {
+                        (st.rssiHistory + current.rssiDbm).takeLast(RSSI_HISTORY)
+                    } else st.rssiHistory
+                    st.copy(current = current ?: st.current, rssiHistory = history)
+                }
+                delay(_state.value.intervalMs)
+            }
+        }
     }
 
     private fun emptyMessage(scanStarted: Boolean): String = when {
@@ -167,6 +200,7 @@ class WifiViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         super.onCleared()
         finalizeJob?.cancel()
+        liveJob?.cancel()
         runCatching { getApplication<Application>().unregisterReceiver(receiver) }
     }
 
@@ -175,5 +209,7 @@ class WifiViewModel(app: Application) : AndroidViewModel(app) {
         const val SCAN_POLL_MS = 2000L
         /** Total time to wait for the system to produce a scan before finalizing. */
         const val SCAN_MAX_WAIT_MS = 16000L
+        /** Samples kept for the live-signal sparkline. */
+        const val RSSI_HISTORY = 60
     }
 }

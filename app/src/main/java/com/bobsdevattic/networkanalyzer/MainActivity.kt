@@ -126,6 +126,8 @@ private fun AnalyzerApp() {
                 Screen.Wifi -> WifiScreen(
                     state = wifi,
                     onScan = wifiVm::scan,
+                    onToggleLive = wifiVm::setLiveEnabled,
+                    onSetInterval = wifiVm::setInterval,
                 )
                 Screen.Cable -> QualificationScreen(
                     state = qual,
