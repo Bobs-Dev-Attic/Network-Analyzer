@@ -20,14 +20,27 @@ class WifiScanner(context: Context) {
 
     val isWifiEnabled: Boolean get() = wifi.isWifiEnabled
 
+    /** Populated when the last [accessPoints] call failed (e.g. a SecurityException). */
+    @Volatile
+    var lastError: String? = null
+        private set
+
     /** Ask the framework to run a fresh scan. Deprecated + throttled since API 28. */
     @Suppress("DEPRECATION")
     fun requestScan(): Boolean = runCatching { wifi.startScan() }.getOrDefault(false)
 
-    /** Latest scan results as APs, or empty if permission/location is missing. */
-    fun accessPoints(currentBssid: String?): List<WifiAp> = runCatching {
-        wifi.scanResults.map { it.toAp(currentBssid) }
-    }.getOrDefault(emptyList())
+    /**
+     * Latest scan results as APs. On failure returns empty and records the reason
+     * in [lastError] so the UI can show the real cause instead of a vague message.
+     */
+    fun accessPoints(currentBssid: String?): List<WifiAp> = try {
+        val aps = wifi.scanResults.map { it.toAp(currentBssid) }
+        lastError = null
+        aps
+    } catch (e: Exception) {
+        lastError = e.javaClass.simpleName + (e.message?.let { ": $it" } ?: "")
+        emptyList()
+    }
 
     @Suppress("DEPRECATION")
     fun current(): CurrentWifi? = runCatching {

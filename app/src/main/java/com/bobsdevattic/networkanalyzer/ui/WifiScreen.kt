@@ -51,17 +51,27 @@ import com.bobsdevattic.networkanalyzer.network.CurrentWifi
 import com.bobsdevattic.networkanalyzer.network.WifiAp
 import com.bobsdevattic.networkanalyzer.network.WifiState
 
-/** The scan permission required on this API level. */
-private fun requiredWifiPermission(): String =
+/**
+ * Scan permissions required on this API level. Location is the universal
+ * requirement for reading scan results; API 33+ also needs Nearby devices.
+ */
+private fun requiredWifiPermissions(): Array<String> =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        Manifest.permission.NEARBY_WIFI_DEVICES
+        arrayOf(
+            Manifest.permission.NEARBY_WIFI_DEVICES,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+        )
     } else {
-        Manifest.permission.ACCESS_FINE_LOCATION
+        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
     }
 
-/** Human-friendly name matching what the user sees in the system prompt/settings. */
-private fun permissionLabel(permission: String): String =
-    if (permission == Manifest.permission.NEARBY_WIFI_DEVICES) "Nearby devices" else "Location"
+/** Human-friendly name for the permission set shown to the user. */
+private fun permissionLabel(): String =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        "Location and Nearby devices"
+    } else {
+        "Location"
+    }
 
 /** Open this app's system settings page so the user can toggle permissions. */
 private fun openAppSettings(context: Context) {
@@ -83,22 +93,20 @@ fun WifiScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val permission = remember { requiredWifiPermission() }
-    var granted by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(context, permission) ==
-                PackageManager.PERMISSION_GRANTED
-        )
+    val permissions = remember { requiredWifiPermissions() }
+    fun allGranted() = permissions.all {
+        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
     }
+    var granted by remember { mutableStateOf(allGranted()) }
     // Once Android suppresses the prompt (denied before / "don't ask again"),
     // launch() silently no-ops — so we fall back to the app settings screen.
     var promptSuppressed by remember { mutableStateOf(false) }
 
     val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { ok ->
-        granted = ok
-        if (ok) onScan() else promptSuppressed = true
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        granted = permissions.all { result[it] == true }
+        if (granted) onScan() else promptSuppressed = true
     }
 
     // Re-check on resume so granting via system Settings reflects immediately.
@@ -106,8 +114,7 @@ fun WifiScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                val now = ContextCompat.checkSelfPermission(context, permission) ==
-                    PackageManager.PERMISSION_GRANTED
+                val now = allGranted()
                 if (now && !granted) onScan()
                 granted = now
             }
@@ -144,9 +151,9 @@ fun WifiScreen(
 
         if (!granted) {
             PermissionCard(
-                permissionLabel = permissionLabel(permission),
+                permissionLabel = permissionLabel(),
                 promptSuppressed = promptSuppressed,
-                onGrant = { launcher.launch(permission) },
+                onGrant = { launcher.launch(permissions) },
                 onOpenSettings = { openAppSettings(context) },
             )
             return
@@ -179,7 +186,7 @@ fun WifiScreen(
         }
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxWidth().weight(1f),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(state.aps, key = { it.bssid.ifBlank { it.ssid + it.channel } }) { ap ->

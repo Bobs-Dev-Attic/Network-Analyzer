@@ -140,7 +140,7 @@ fun PortScanScreen(
         }
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxWidth().weight(1f),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(state.openPorts, key = { it.port }) { result ->

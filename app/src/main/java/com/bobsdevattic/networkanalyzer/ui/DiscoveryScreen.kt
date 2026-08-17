@@ -85,7 +85,7 @@ fun DiscoveryScreen(
         }
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxWidth().weight(1f),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(state.hosts, key = { it.ip }) { host ->
