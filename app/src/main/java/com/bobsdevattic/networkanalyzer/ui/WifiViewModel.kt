@@ -42,7 +42,9 @@ class WifiViewModel(app: Application) : AndroidViewModel(app) {
     private var finalizeJob: Job? = null
 
     private val receiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) = load(finalize = true)
+        // A completed scan (ours or the system's) — populate if it has results,
+        // but don't finalize an empty message here; the poll loop decides that.
+        override fun onReceive(context: Context?, intent: Intent?) = load(finalize = false)
     }
 
     init {
@@ -54,7 +56,13 @@ class WifiViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    /** Request a fresh scan; show cached results now, finalize after the scan lands. */
+    /**
+     * Request a fresh scan and show cached results now. Because Android throttles
+     * app-initiated scans, we then poll [scanner]'s results for a while — the
+     * system scans on its own and our SCAN_RESULTS_AVAILABLE receiver also feeds
+     * in — finalizing as soon as any AP appears, or with a message if the window
+     * elapses empty.
+     */
     fun scan() {
         _state.value = _state.value.copy(scanning = true, message = null)
         val started = scanner.requestScan()
@@ -62,7 +70,17 @@ class WifiViewModel(app: Application) : AndroidViewModel(app) {
 
         finalizeJob?.cancel()
         finalizeJob = viewModelScope.launch {
-            delay(SCAN_WAIT_MS)
+            var waited = 0L
+            while (waited < SCAN_MAX_WAIT_MS) {
+                delay(SCAN_POLL_MS)
+                waited += SCAN_POLL_MS
+                if (scanner.isWifiEnabled &&
+                    scanner.accessPoints(scanner.current()?.bssid).isNotEmpty()
+                ) {
+                    load(finalize = false) // populates and stops the spinner
+                    return@launch
+                }
+            }
             load(finalize = true, scanStarted = started)
         }
     }
@@ -118,7 +136,8 @@ class WifiViewModel(app: Application) : AndroidViewModel(app) {
                 "phones require it for WiFi scans even when the app permission is " +
                 "granted — then tap Scan."
         !scanStarted ->
-            "Android rate-limited the scan. Wait about 10 seconds and tap Scan again."
+            "Android limits how often apps can trigger a WiFi scan, so this is showing " +
+                "the system's cached results. Tap Scan again in a few seconds to refresh."
         else ->
             "No networks found. Check that WiFi is on and this app has the " +
                 "Nearby-devices (or Location) permission, then tap Scan."
@@ -148,7 +167,9 @@ class WifiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private companion object {
-        /** Fallback wait for the async scan to complete before finalizing empty. */
-        const val SCAN_WAIT_MS = 6000L
+        /** How often to re-check for scan results while waiting. */
+        const val SCAN_POLL_MS = 2000L
+        /** Total time to wait for the system to produce a scan before finalizing. */
+        const val SCAN_MAX_WAIT_MS = 16000L
     }
 }
