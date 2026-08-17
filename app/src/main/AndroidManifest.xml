@@ -12,18 +12,15 @@
     <!--
       WiFi analysis (M6) uses the phone's own radio.
       - ACCESS_WIFI_STATE / CHANGE_WIFI_STATE: read scan results, request scans.
-      - NEARBY_WIFI_DEVICES (API 33+, neverForLocation): list APs without location.
-      - ACCESS_FINE_LOCATION (API <= 32 only): required by older Android to return
-        scan results; capped so 33+ relies on NEARBY_WIFI_DEVICES instead.
+      - ACCESS_FINE_LOCATION: the universal requirement for reading scan results
+        (SSID/BSSID) across Android versions; must be granted AND system Location on.
+      - NEARBY_WIFI_DEVICES (API 33+): the modern scan permission. Kept WITHOUT
+        neverForLocation, since some devices return empty results with that flag.
     -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
-    <uses-permission
-        android:name="android.permission.NEARBY_WIFI_DEVICES"
-        android:usesPermissionFlags="neverForLocation" />
-    <uses-permission
-        android:name="android.permission.ACCESS_FINE_LOCATION"
-        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
 
     <!-- USB host mode is how the phone talks to the adapter; declared as optional
          so the app still installs on devices for future WiFi-only features. -->

@@ -131,6 +131,10 @@ class WifiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun emptyMessage(scanStarted: Boolean): String = when {
+        scanner.lastError != null ->
+            "Couldn't read scan results: ${scanner.lastError}. This usually means the " +
+                "Location permission or the system Location switch is still required — " +
+                "grant Location and turn on system Location, then tap Scan."
         !isLocationEnabled() ->
             "No networks found. Turn on system Location (Settings → Location) — most " +
                 "phones require it for WiFi scans even when the app permission is " +
