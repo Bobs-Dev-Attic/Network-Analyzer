@@ -9,7 +9,9 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,8 +28,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -35,9 +39,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -90,6 +96,8 @@ private fun openAppSettings(context: Context) {
 fun WifiScreen(
     state: WifiState,
     onScan: () -> Unit,
+    onToggleLive: (Boolean) -> Unit,
+    onSetInterval: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -159,7 +167,16 @@ fun WifiScreen(
             return
         }
 
-        state.current?.let { CurrentCard(it) }
+        state.current?.let {
+            CurrentCard(
+                c = it,
+                liveEnabled = state.liveEnabled,
+                intervalMs = state.intervalMs,
+                rssiHistory = state.rssiHistory,
+                onToggleLive = onToggleLive,
+                onSetInterval = onSetInterval,
+            )
+        }
         if (state.channelLoads.isNotEmpty()) CongestionCard(state.channelLoads)
 
         if (state.scanning && state.aps.isEmpty()) {
@@ -227,60 +244,175 @@ private fun PermissionCard(
     }
 }
 
+private val LIVE_INTERVALS = listOf("0.5s" to 500L, "1s" to 1000L, "2s" to 2000L, "5s" to 5000L)
+
 @Composable
-private fun CurrentCard(c: CurrentWifi) {
+private fun CollapsibleHeader(
+    title: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        Modifier.fillMaxWidth().clickable { onToggle() },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+        trailing?.invoke()
+        Text(
+            if (expanded) "▾" else "▸",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun CurrentCard(
+    c: CurrentWifi,
+    liveEnabled: Boolean,
+    intervalMs: Long,
+    rssiHistory: List<Int>,
+    onToggleLive: (Boolean) -> Unit,
+    onSetInterval: (Long) -> Unit,
+) {
+    var expanded by rememberSaveable { mutableStateOf(true) }
     Card(
         Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Connected", style = MaterialTheme.typography.titleMedium)
-            InfoLine("SSID", c.ssid)
-            c.bssid?.let { InfoLine("BSSID", it, mono = true) }
-            InfoLine("Signal", "${c.rssiDbm} dBm")
-            c.linkSpeedMbps?.let { InfoLine("Link speed", "$it Mbps") }
-            val chan = c.channel?.let { "ch $it · ${c.band.label}" } ?: c.band.label
-            InfoLine("Channel", chan)
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            CollapsibleHeader(
+                title = "Connected",
+                expanded = expanded,
+                onToggle = { expanded = !expanded },
+                trailing = {
+                    // Live-updating (when enabled) signal, always visible in the header.
+                    Text(
+                        "${signalGlyph(rssiBars(c.rssiDbm))}  ${c.rssiDbm} dBm",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                },
+            )
+
+            if (expanded) {
+                InfoLine("SSID", c.ssid)
+                c.bssid?.let { InfoLine("BSSID", it, mono = true) }
+                c.linkSpeedMbps?.let { InfoLine("Link speed", "$it Mbps") }
+                val chan = c.channel?.let { "ch $it · ${c.band.label}" } ?: c.band.label
+                InfoLine("Channel", chan)
+
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Live signal", style = MaterialTheme.typography.bodyMedium)
+                    Switch(checked = liveEnabled, onCheckedChange = onToggleLive)
+                }
+
+                if (liveEnabled) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LIVE_INTERVALS.forEach { (label, ms) ->
+                            FilterChip(
+                                selected = intervalMs == ms,
+                                onClick = { onSetInterval(ms) },
+                                label = { Text(label) },
+                            )
+                        }
+                    }
+                    if (rssiHistory.size >= 2) {
+                        Box(Modifier.fillMaxWidth().height(80.dp)) { RssiSparkline(rssiHistory) }
+                    } else {
+                        Text("Sampling…", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RssiSparkline(history: List<Int>) {
+    val line = MaterialTheme.colorScheme.primary
+    val axis = MaterialTheme.colorScheme.outlineVariant
+    Canvas(Modifier.fillMaxSize()) {
+        drawLine(axis, Offset(0f, size.height), Offset(size.width, size.height), 2f)
+        if (history.size < 2) return@Canvas
+        // Map dBm onto the canvas: -100 (bottom) .. -30 (top).
+        val minD = -100f
+        val maxD = -30f
+        fun y(dbm: Int): Float {
+            val frac = ((dbm.toFloat() - minD) / (maxD - minD)).coerceIn(0f, 1f)
+            return size.height - frac * size.height
+        }
+        val stepX = size.width / (history.size - 1)
+        var prev = Offset(0f, y(history[0]))
+        for (i in 1 until history.size) {
+            val cur = Offset(i * stepX, y(history[i]))
+            drawLine(line, prev, cur, strokeWidth = 3f)
+            prev = cur
         }
     }
 }
 
 @Composable
 private fun CongestionCard(loads: List<ChannelLoad>) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
     val max = loads.maxOf { it.count }.coerceAtLeast(1)
     Card(
         Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Channel congestion", style = MaterialTheme.typography.titleMedium)
-            loads.take(8).forEach { load ->
-                Row(verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "${load.band.label} ch ${load.channel}",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.width(120.dp),
-                    )
-                    // Full-width track with a proportional fill.
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .height(14.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                    ) {
+            CollapsibleHeader(
+                title = "Channel congestion",
+                expanded = expanded,
+                onToggle = { expanded = !expanded },
+                trailing = {
+                    Text("${loads.size} ch", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                },
+            )
+            if (expanded) {
+                loads.take(8).forEach { load ->
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "${load.band.label} ch ${load.channel}",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.width(120.dp),
+                        )
                         Box(
                             Modifier
-                                .fillMaxWidth(load.count.toFloat() / max)
+                                .weight(1f)
                                 .height(14.dp)
-                                .background(MaterialTheme.colorScheme.primary),
-                        )
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                        ) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth(load.count.toFloat() / max)
+                                    .height(14.dp)
+                                    .background(MaterialTheme.colorScheme.primary),
+                            )
+                        }
+                        Text("${load.count}", style = MaterialTheme.typography.bodySmall)
                     }
-                    Text("${load.count}", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
     }
+}
+
+private fun rssiBars(dbm: Int): Int = when {
+    dbm >= -55 -> 4
+    dbm >= -66 -> 3
+    dbm >= -77 -> 2
+    dbm >= -88 -> 1
+    else -> 0
 }
 
 @Composable

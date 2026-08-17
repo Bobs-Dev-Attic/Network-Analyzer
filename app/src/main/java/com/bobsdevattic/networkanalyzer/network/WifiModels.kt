@@ -56,4 +56,8 @@ data class WifiState(
     val aps: List<WifiAp> = emptyList(),
     val channelLoads: List<ChannelLoad> = emptyList(),
     val message: String? = null,
+    // Live signal meter (connected network only — connectionInfo isn't throttled).
+    val liveEnabled: Boolean = false,
+    val intervalMs: Long = 1000L,
+    val rssiHistory: List<Int> = emptyList(),
 )
