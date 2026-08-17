@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.bobsdevattic.networkanalyzer.data.AdapterStatus
 import com.bobsdevattic.networkanalyzer.data.EthernetInterfaceInfo
+import com.bobsdevattic.networkanalyzer.network.CurrentWifi
 
 /**
  * M1 screen: shows the wired USB-C Ethernet link state and lets the user pin
@@ -31,6 +32,7 @@ import com.bobsdevattic.networkanalyzer.data.EthernetInterfaceInfo
 @Composable
 fun InterfaceScreen(
     info: EthernetInterfaceInfo,
+    wifi: CurrentWifi?,
     onRefresh: () -> Unit,
     onBind: () -> Unit,
     onUnbind: () -> Unit,
@@ -52,6 +54,8 @@ fun InterfaceScreen(
             AdapterStatus.ABSENT -> AbsentCard()
             AdapterStatus.CONNECTED -> ConnectedCards(info)
         }
+
+        wifi?.let { WifiCard(it) }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -136,6 +140,32 @@ private fun ConnectedCards(info: EthernetInterfaceInfo) {
         footnote = "Estimate reported by Android, not the negotiated PHY rate.",
     )
 }
+
+@Composable
+private fun WifiCard(w: CurrentWifi) {
+    val chan = w.channel?.let { "ch $it · ${w.band.label}" } ?: w.band.label
+    InfoCard(
+        title = "WiFi signal",
+        rows = listOf(
+            "Network" to w.ssid,
+            "Signal" to "${signalGlyph(rssiBars(w.rssiDbm))}  ${w.rssiDbm} dBm",
+            "Link speed" to w.linkSpeedMbps?.let { "$it Mbps" },
+            "Channel" to chan,
+        ),
+        footnote = "From the phone's WiFi radio — refresh to update.",
+    )
+}
+
+private fun rssiBars(dbm: Int): Int = when {
+    dbm >= -55 -> 4
+    dbm >= -66 -> 3
+    dbm >= -77 -> 2
+    dbm >= -88 -> 1
+    else -> 0
+}
+
+private fun signalGlyph(bars: Int): String =
+    "▮".repeat(bars) + "▯".repeat(4 - bars)
 
 @Composable
 private fun InfoCard(

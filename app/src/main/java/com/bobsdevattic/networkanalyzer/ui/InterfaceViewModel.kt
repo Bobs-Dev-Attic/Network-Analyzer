@@ -9,7 +9,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.bobsdevattic.networkanalyzer.data.AdapterStatus
 import com.bobsdevattic.networkanalyzer.data.EthernetInterfaceInfo
+import com.bobsdevattic.networkanalyzer.network.CurrentWifi
 import com.bobsdevattic.networkanalyzer.network.EthernetInterfaceManager
+import com.bobsdevattic.networkanalyzer.network.WifiScanner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +29,7 @@ import kotlinx.coroutines.withContext
 class InterfaceViewModel(app: Application) : AndroidViewModel(app) {
 
     private val manager = EthernetInterfaceManager(app)
+    private val wifiScanner = WifiScanner(app)
     private val cm =
         app.getSystemService(ConnectivityManager::class.java)
 
@@ -34,6 +37,10 @@ class InterfaceViewModel(app: Application) : AndroidViewModel(app) {
         EthernetInterfaceInfo(status = AdapterStatus.ABSENT)
     )
     val state: StateFlow<EthernetInterfaceInfo> = _state.asStateFlow()
+
+    /** Connected-WiFi signal readout, refreshed alongside the wired snapshot. */
+    private val _wifi = MutableStateFlow<CurrentWifi?>(null)
+    val wifi: StateFlow<CurrentWifi?> = _wifi.asStateFlow()
 
     private val callback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) = refresh()
@@ -55,6 +62,7 @@ class InterfaceViewModel(app: Application) : AndroidViewModel(app) {
     fun refresh() {
         viewModelScope.launch {
             _state.value = withContext(Dispatchers.IO) { manager.inspect() }
+            _wifi.value = withContext(Dispatchers.IO) { wifiScanner.current() }
         }
     }
 
