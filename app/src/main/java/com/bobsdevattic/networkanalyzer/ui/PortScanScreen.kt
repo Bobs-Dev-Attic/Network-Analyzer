@@ -33,6 +33,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.bobsdevattic.networkanalyzer.network.PortResult
 import com.bobsdevattic.networkanalyzer.network.PortScanState
+import com.bobsdevattic.networkanalyzer.network.PortState
+import com.bobsdevattic.networkanalyzer.ui.theme.StatusChip
+import com.bobsdevattic.networkanalyzer.ui.theme.statusOf
 
 /**
  * M4 screen: scan the TCP ports of a single host and identify services. The
@@ -125,12 +128,11 @@ fun PortScanScreen(
         }
 
         if (!state.scanning && state.total > 0) {
-            Text(
-                "${state.openPorts.size} open · ${state.closedCount} closed · " +
-                    "${state.filteredCount} filtered",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                StatusChip("${state.openPorts.size} open", statusOf(PortState.OPEN))
+                StatusChip("${state.closedCount} closed", statusOf(PortState.CLOSED))
+                StatusChip("${state.filteredCount} filtered", statusOf(PortState.FILTERED))
+            }
         }
 
         state.message?.let { msg ->
@@ -171,6 +173,10 @@ private fun PortCard(result: PortResult) {
                     Text(it, style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary)
                 }
+                StatusChip(
+                    label = result.state.name.lowercase(),
+                    status = statusOf(result.state),
+                )
             }
             result.banner?.let {
                 Text(

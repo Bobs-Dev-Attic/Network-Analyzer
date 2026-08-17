@@ -23,12 +23,18 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.bobsdevattic.networkanalyzer.network.DnsResult
 import com.bobsdevattic.networkanalyzer.network.LatencyResult
 import com.bobsdevattic.networkanalyzer.network.SpeedQualityState
 import com.bobsdevattic.networkanalyzer.network.ThroughputResult
+import com.bobsdevattic.networkanalyzer.ui.theme.Status
+import com.bobsdevattic.networkanalyzer.ui.theme.colors
+import com.bobsdevattic.networkanalyzer.ui.theme.statusOfLatencyMs
+import com.bobsdevattic.networkanalyzer.ui.theme.statusOfLossPct
+import com.bobsdevattic.networkanalyzer.ui.theme.statusOfOk
 
 /**
  * M5 screen: latency (TCP-ping), DNS timing, and HTTP download throughput over
@@ -105,10 +111,16 @@ fun SpeedQualityScreen(
 @Composable
 private fun LatencyCard(r: LatencyResult) {
     MetricCard("Latency (TCP-ping ${r.target}:${r.port})") {
-        MetricRow("Avg", "%.1f ms".format(r.avgMs))
+        MetricRow("Avg", "%.1f ms".format(r.avgMs), statusOfLatencyMs(r.avgMs))
         MetricRow("Min / Max", "%.1f / %.1f ms".format(r.minMs, r.maxMs))
+        // Jitter is left uncoloured: its healthy range is far tighter than latency's,
+        // so reusing the latency thresholds here would flatter a bad reading.
         MetricRow("Jitter", "%.1f ms".format(r.jitterMs))
-        MetricRow("Loss", "%.0f%% (%d/%d)".format(r.lossPct, r.received, r.sent))
+        MetricRow(
+            "Loss",
+            "%.0f%% (%d/%d)".format(r.lossPct, r.received, r.sent),
+            statusOfLossPct(r.lossPct),
+        )
     }
 }
 
@@ -117,7 +129,11 @@ private fun DnsCard(results: List<DnsResult>, avgMs: Double?) {
     MetricCard("DNS resolution") {
         avgMs?.let { MetricRow("Average", "%.1f ms".format(it)) }
         results.forEach { d ->
-            MetricRow(d.name, if (d.ok && d.ms != null) "%.0f ms".format(d.ms) else "failed")
+            MetricRow(
+                d.name,
+                if (d.ok && d.ms != null) "%.0f ms".format(d.ms) else "failed",
+                statusOfOk(d.ok),
+            )
         }
     }
 }
@@ -144,8 +160,9 @@ private fun MetricCard(title: String, content: @Composable () -> Unit) {
     }
 }
 
+/** [status] tints the value only; null leaves it in the default on-surface colour. */
 @Composable
-private fun MetricRow(label: String, value: String) {
+private fun MetricRow(label: String, value: String, status: Status? = null) {
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -153,6 +170,7 @@ private fun MetricRow(label: String, value: String) {
         Text(label, style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodyMedium,
-            fontFamily = FontFamily.Monospace)
+            fontFamily = FontFamily.Monospace,
+            color = status?.colors()?.fg ?: Color.Unspecified)
     }
 }

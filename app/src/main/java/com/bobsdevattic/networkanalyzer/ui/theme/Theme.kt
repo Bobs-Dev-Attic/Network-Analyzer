@@ -8,6 +8,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalContext
 import com.bobsdevattic.networkanalyzer.data.ThemeMode
 
@@ -32,5 +33,11 @@ fun NetworkAnalyzerTheme(
         darkTheme -> DarkColors
         else -> LightColors
     }
-    MaterialTheme(colorScheme = colorScheme, content = content)
+    // Status colours are derived from the *resolved* dark flag above, not from
+    // isSystemInDarkTheme(), so they follow the app's ThemeMode override rather than
+    // the system setting when the two disagree.
+    val statusColors = if (darkTheme) DarkStatusColors else LightStatusColors
+    CompositionLocalProvider(LocalStatusColors provides statusColors) {
+        MaterialTheme(colorScheme = colorScheme, content = content)
+    }
 }

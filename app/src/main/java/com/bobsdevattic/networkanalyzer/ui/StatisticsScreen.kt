@@ -26,6 +26,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.bobsdevattic.networkanalyzer.network.StatsState
 import com.bobsdevattic.networkanalyzer.network.ThroughputSample
+import com.bobsdevattic.networkanalyzer.ui.theme.Status
+import com.bobsdevattic.networkanalyzer.ui.theme.colors
+import com.bobsdevattic.networkanalyzer.ui.theme.statusOfErrorCount
 import kotlin.math.max
 
 private val RxColor = Color(0xFF3D9970)
@@ -235,15 +238,17 @@ private fun LegendDot(label: String, color: Color) {
 
 @Composable
 private fun CountersCard(stats: StatsState) {
-    val rows = listOf(
-        "RX total" to formatBytes(stats.rxBytes),
-        "TX total" to formatBytes(stats.txBytes),
-        "RX packets" to stats.rxPackets.toString(),
-        "TX packets" to stats.txPackets.toString(),
-        "RX errors" to stats.rxErrors.toString(),
-        "TX errors" to stats.txErrors.toString(),
-        "RX dropped" to stats.rxDropped.toString(),
-        "TX dropped" to stats.txDropped.toString(),
+    // Only the error and drop counters carry a status: totals and packet counts have
+    // no healthy-or-not reading, so colouring them would be noise.
+    val rows: List<Triple<String, String, Status?>> = listOf(
+        Triple("RX total", formatBytes(stats.rxBytes), null),
+        Triple("TX total", formatBytes(stats.txBytes), null),
+        Triple("RX packets", stats.rxPackets.toString(), null),
+        Triple("TX packets", stats.txPackets.toString(), null),
+        Triple("RX errors", stats.rxErrors.toString(), statusOfErrorCount(stats.rxErrors)),
+        Triple("TX errors", stats.txErrors.toString(), statusOfErrorCount(stats.txErrors)),
+        Triple("RX dropped", stats.rxDropped.toString(), statusOfErrorCount(stats.rxDropped)),
+        Triple("TX dropped", stats.txDropped.toString(), statusOfErrorCount(stats.txDropped)),
     )
     Card(
         Modifier.fillMaxWidth(),
@@ -251,7 +256,7 @@ private fun CountersCard(stats: StatsState) {
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Counters", style = MaterialTheme.typography.titleMedium)
-            rows.forEach { (label, value) ->
+            rows.forEach { (label, value, status) ->
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -259,7 +264,8 @@ private fun CountersCard(stats: StatsState) {
                     Text(label, style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(value, style = MaterialTheme.typography.bodyMedium,
-                        fontFamily = FontFamily.Monospace)
+                        fontFamily = FontFamily.Monospace,
+                        color = status?.colors()?.fg ?: Color.Unspecified)
                 }
             }
             Text(
