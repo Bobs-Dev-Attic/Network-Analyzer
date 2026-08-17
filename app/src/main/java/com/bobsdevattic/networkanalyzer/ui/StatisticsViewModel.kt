@@ -3,11 +3,13 @@ package com.bobsdevattic.networkanalyzer.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.bobsdevattic.networkanalyzer.network.CurrentWifi
 import com.bobsdevattic.networkanalyzer.network.EthernetInterfaceManager
 import com.bobsdevattic.networkanalyzer.network.RawCounters
 import com.bobsdevattic.networkanalyzer.network.StatisticsReader
 import com.bobsdevattic.networkanalyzer.network.StatsState
 import com.bobsdevattic.networkanalyzer.network.ThroughputSample
+import com.bobsdevattic.networkanalyzer.network.WifiScanner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -26,6 +28,7 @@ import kotlinx.coroutines.withContext
 class StatisticsViewModel(app: Application) : AndroidViewModel(app) {
 
     private val manager = EthernetInterfaceManager(app)
+    private val wifiScanner = WifiScanner(app)
 
     private val _state = MutableStateFlow(StatsState.empty())
     val state: StateFlow<StatsState> = _state.asStateFlow()
@@ -33,6 +36,7 @@ class StatisticsViewModel(app: Application) : AndroidViewModel(app) {
     private var previous: RawCounters? = null
     private var previousIface: String? = null
     private val history = ArrayDeque<ThroughputSample>()
+    private val rssiHistory = ArrayDeque<Int>()
     private var pollJob: Job? = null
 
     /** Begin (or resume) polling. Idempotent. */
@@ -52,17 +56,27 @@ class StatisticsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private suspend fun tick() {
+        // WiFi signal is sampled every tick, independent of the wired link, so the
+        // graph works even with no adapter attached.
+        val wifi = withContext(Dispatchers.IO) { wifiScanner.current() }
+        if (wifi != null) {
+            rssiHistory.addLast(wifi.rssiDbm)
+            while (rssiHistory.size > HISTORY_SIZE) rssiHistory.removeFirst()
+        } else {
+            rssiHistory.clear()
+        }
+
         val iface = withContext(Dispatchers.IO) { manager.currentInterfaceName() }
         if (iface == null) {
-            resetHistory()
-            _state.value = StatsState.empty()
+            resetCounters()
+            _state.value = StatsState(available = false).withWifi(wifi)
             return
         }
 
         val now = withContext(Dispatchers.IO) { StatisticsReader.read(iface) }
         if (now == null) {
-            resetHistory()
-            _state.value = StatsState(available = false, interfaceName = iface)
+            resetCounters()
+            _state.value = StatsState(available = false, interfaceName = iface).withWifi(wifi)
             return
         }
 
@@ -73,8 +87,8 @@ class StatisticsViewModel(app: Application) : AndroidViewModel(app) {
 
         // First sample after (re)start or interface change: no rate yet.
         if (prev == null || ifaceChanged) {
-            if (ifaceChanged) resetHistory()
-            _state.value = snapshot(iface, now, rx = 0.0, tx = 0.0)
+            if (ifaceChanged) history.clear()
+            _state.value = snapshot(iface, now, rx = 0.0, tx = 0.0).withWifi(wifi)
             return
         }
 
@@ -87,8 +101,14 @@ class StatisticsViewModel(app: Application) : AndroidViewModel(app) {
         history.addLast(ThroughputSample(rxMbps, txMbps))
         while (history.size > HISTORY_SIZE) history.removeFirst()
 
-        _state.value = snapshot(iface, now, rxMbps, txMbps)
+        _state.value = snapshot(iface, now, rxMbps, txMbps).withWifi(wifi)
     }
+
+    private fun StatsState.withWifi(wifi: CurrentWifi?) = copy(
+        wifiSsid = wifi?.ssid,
+        wifiRssiDbm = wifi?.rssiDbm,
+        wifiRssiHistory = rssiHistory.toList(),
+    )
 
     private fun snapshot(
         iface: String,
@@ -111,7 +131,7 @@ class StatisticsViewModel(app: Application) : AndroidViewModel(app) {
         history = history.toList(),
     )
 
-    private fun resetHistory() {
+    private fun resetCounters() {
         previous = null
         previousIface = null
         history.clear()
