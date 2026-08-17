@@ -28,6 +28,8 @@ import com.bobsdevattic.networkanalyzer.ui.PortScanScreen
 import com.bobsdevattic.networkanalyzer.ui.PortScanViewModel
 import com.bobsdevattic.networkanalyzer.ui.QualificationScreen
 import com.bobsdevattic.networkanalyzer.ui.QualificationViewModel
+import com.bobsdevattic.networkanalyzer.ui.SettingsScreen
+import com.bobsdevattic.networkanalyzer.ui.SettingsViewModel
 import com.bobsdevattic.networkanalyzer.ui.SpeedQualityScreen
 import com.bobsdevattic.networkanalyzer.ui.SpeedQualityViewModel
 import com.bobsdevattic.networkanalyzer.ui.StatisticsScreen
@@ -41,8 +43,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            NetworkAnalyzerTheme {
-                AnalyzerApp()
+            val settingsVm: SettingsViewModel = viewModel()
+            val themeMode by settingsVm.themeMode.collectAsStateWithLifecycle()
+            NetworkAnalyzerTheme(themeMode = themeMode) {
+                AnalyzerApp(settingsVm = settingsVm)
             }
         }
     }
@@ -56,10 +60,11 @@ private enum class Screen(val label: String) {
     Speed("Speed"),
     Wifi("WiFi"),
     Cable("Cable"),
+    Settings("Settings"),
 }
 
 @Composable
-private fun AnalyzerApp() {
+private fun AnalyzerApp(settingsVm: SettingsViewModel) {
     val interfaceVm: InterfaceViewModel = viewModel()
     val statsVm: StatisticsViewModel = viewModel()
     val discoveryVm: DiscoveryViewModel = viewModel()
@@ -76,6 +81,7 @@ private fun AnalyzerApp() {
     val speed by speedVm.state.collectAsStateWithLifecycle()
     val wifi by wifiVm.state.collectAsStateWithLifecycle()
     val qual by qualVm.state.collectAsStateWithLifecycle()
+    val themeMode by settingsVm.themeMode.collectAsStateWithLifecycle()
 
     // M2 polls continuously while the app is in memory; lifecycle-gating can come
     // later. Kick it off once on first composition.
@@ -138,6 +144,10 @@ private fun AnalyzerApp() {
                     onStopServer = qualVm::stopServer,
                     onRunClient = qualVm::runClient,
                     onCancelClient = qualVm::cancelClient,
+                )
+                Screen.Settings -> SettingsScreen(
+                    themeMode = themeMode,
+                    onSetThemeMode = settingsVm::setThemeMode,
                 )
             }
         }
