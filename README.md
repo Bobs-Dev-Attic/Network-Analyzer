@@ -99,7 +99,9 @@ sysfs; no raw sockets or privileged calls._
 **M2 — Statistics** ✅ _implemented_
 Live RX/TX throughput meter + rolling sparkline + packet/error/dropped counters,
 sampled once per second from `/sys/class/net/<iface>/statistics/`. Surfaced on a
-second "Statistics" tab.
+second "Statistics" tab. Also plots a **WiFi signal-strength graph** (connected
+network RSSI over time), sampled every tick independent of the wired link — so it
+works even with no adapter attached.
 
 **M3 — Discovery & inventory** ✅ _implemented_
 On-demand subnet sweep on a third "Hosts" tab: TCP-connect probes across the

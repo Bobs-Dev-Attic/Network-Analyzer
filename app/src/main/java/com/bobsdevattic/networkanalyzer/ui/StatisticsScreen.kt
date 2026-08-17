@@ -30,6 +30,7 @@ import kotlin.math.max
 
 private val RxColor = Color(0xFF3D9970)
 private val TxColor = Color(0xFF0074D9)
+private val SignalColor = Color(0xFFB10DC9)
 
 /**
  * M2 screen: live RX/TX throughput meter, a rolling sparkline, and the raw
@@ -49,13 +50,19 @@ fun StatisticsScreen(
     ) {
         Text("Live Statistics", style = MaterialTheme.typography.headlineSmall)
 
+        // WiFi signal strength — shown whenever connected, independent of the
+        // wired link (works even with no adapter attached).
+        if (stats.wifiRssiDbm != null) {
+            SignalCard(stats.wifiSsid, stats.wifiRssiDbm, stats.wifiRssiHistory)
+        }
+
         if (!stats.available) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("No counters available", style = MaterialTheme.typography.titleMedium)
+                    Text("No wired counters", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Connect a USB-C Ethernet adapter with a live link. Throughput is " +
-                            "read from the interface's kernel counters.",
+                        "Connect a USB-C Ethernet adapter with a live link for throughput " +
+                            "and packet counters. WiFi signal above works without one.",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
@@ -66,6 +73,67 @@ fun StatisticsScreen(
         ThroughputHeader(stats)
         SparklineCard(stats.history)
         CountersCard(stats)
+    }
+}
+
+@Composable
+private fun SignalCard(ssid: String?, rssiDbm: Int, history: List<Int>) {
+    Card(
+        Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text("WiFi signal", style = MaterialTheme.typography.titleMedium)
+                    ssid?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Text(
+                    "$rssiDbm dBm",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = SignalColor,
+                )
+            }
+            Box(Modifier.fillMaxWidth().height(100.dp)) {
+                SignalSparkline(history)
+            }
+            Text(
+                "Range −100 to −30 dBm (higher is stronger)",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SignalSparkline(history: List<Int>) {
+    val line = SignalColor
+    val axis = MaterialTheme.colorScheme.outlineVariant
+    Canvas(Modifier.fillMaxSize()) {
+        drawLine(axis, Offset(0f, size.height), Offset(size.width, size.height), 2f)
+        if (history.size < 2) return@Canvas
+        val minD = -100f
+        val maxD = -30f
+        fun y(dbm: Int): Float {
+            val frac = ((dbm.toFloat() - minD) / (maxD - minD)).coerceIn(0f, 1f)
+            return size.height - frac * size.height
+        }
+        val stepX = size.width / (history.size - 1)
+        var prev = Offset(0f, y(history[0]))
+        for (i in 1 until history.size) {
+            val cur = Offset(i * stepX, y(history[i]))
+            drawLine(line, prev, cur, strokeWidth = 3f)
+            prev = cur
+        }
     }
 }
 

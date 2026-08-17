@@ -41,6 +41,10 @@ data class StatsState(
     val rxDropped: Long = 0,
     val txDropped: Long = 0,
     val history: List<ThroughputSample> = emptyList(),
+    // WiFi signal strength (connected network), sampled alongside the wired stats.
+    val wifiSsid: String? = null,
+    val wifiRssiDbm: Int? = null,
+    val wifiRssiHistory: List<Int> = emptyList(),
 ) {
     companion object {
         fun empty() = StatsState(available = false)
