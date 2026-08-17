@@ -69,6 +69,7 @@ private fun AnalyzerApp() {
     val qualVm: QualificationViewModel = viewModel()
 
     val info by interfaceVm.state.collectAsStateWithLifecycle()
+    val linkWifi by interfaceVm.wifi.collectAsStateWithLifecycle()
     val stats by statsVm.state.collectAsStateWithLifecycle()
     val discovery by discoveryVm.state.collectAsStateWithLifecycle()
     val portScan by portScanVm.state.collectAsStateWithLifecycle()
@@ -97,6 +98,7 @@ private fun AnalyzerApp() {
             when (screens[selected]) {
                 Screen.Link -> InterfaceScreen(
                     info = info,
+                    wifi = linkWifi,
                     onRefresh = interfaceVm::refresh,
                     onBind = interfaceVm::bindToEthernet,
                     onUnbind = interfaceVm::unbind,
