@@ -276,12 +276,23 @@ your file manager/browser — approve it, then tap **Install**.
 
 ### WiFi tab shows no networks
 
-- **Grant the permission** when prompted (Nearby devices on Android 13+, Location
-  below). Without it, scan results are empty.
-- **Android 12 and below:** system **location services** must be ON for scan
-  results to return, even with the app permission granted.
+- **Turn on system Location** (Settings → Location). This is the most common
+  cause: **most phones gate WiFi scan results behind the Location master switch
+  even when the app permission is granted** — and even on Android 13+, despite the
+  app declaring `NEARBY_WIFI_DEVICES` with `neverForLocation`. The app now detects
+  this and says so in the empty-state message.
+- **Grant the permission** when prompted. On **Android 13+ the prompt says
+  "Nearby devices," not "Location"** — that's the modern WiFi-scan permission, so
+  don't wait for a location prompt that won't come. Below 13 it asks for Location.
+- **Never asked / no prompt appears?** Android suppresses a permission prompt once
+  it's been dismissed or denied ("don't ask again"), so the button silently does
+  nothing. Use the **Open app settings** button (or Settings → Apps → Network
+  Analyzer → Permissions) and enable **Nearby devices** / **Location** by hand. The
+  app re-checks on resume, so it updates the moment you come back.
 - **Scan throttling** (Android 9+) rate-limits scans to a few per couple of
-  minutes; wait a moment between scans.
+  minutes. The app requests a scan, shows a "Scanning…" spinner, and waits for the
+  result before reporting empty; if a scan is throttled it tells you to retry in
+  ~10 s.
 
 ### Speed tab: download test fails
 

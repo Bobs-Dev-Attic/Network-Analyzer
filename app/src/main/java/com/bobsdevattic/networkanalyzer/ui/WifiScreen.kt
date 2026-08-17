@@ -1,8 +1,12 @@
 package com.bobsdevattic.networkanalyzer.ui
 
 import android.Manifest
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -14,15 +18,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,6 +43,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.bobsdevattic.networkanalyzer.network.ChannelLoad
 import com.bobsdevattic.networkanalyzer.network.CurrentWifi
 import com.bobsdevattic.networkanalyzer.network.WifiAp
@@ -46,6 +58,19 @@ private fun requiredWifiPermission(): String =
     } else {
         Manifest.permission.ACCESS_FINE_LOCATION
     }
+
+/** Human-friendly name matching what the user sees in the system prompt/settings. */
+private fun permissionLabel(permission: String): String =
+    if (permission == Manifest.permission.NEARBY_WIFI_DEVICES) "Nearby devices" else "Location"
+
+/** Open this app's system settings page so the user can toggle permissions. */
+private fun openAppSettings(context: Context) {
+    val intent = Intent(
+        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        Uri.fromParts("package", context.packageName, null),
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { context.startActivity(intent) }
+}
 
 /**
  * M6 screen: nearby APs, channel congestion, and current association — using the
@@ -65,12 +90,36 @@ fun WifiScreen(
                 PackageManager.PERMISSION_GRANTED
         )
     }
+    // Once Android suppresses the prompt (denied before / "don't ask again"),
+    // launch() silently no-ops — so we fall back to the app settings screen.
+    var promptSuppressed by remember { mutableStateOf(false) }
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { ok ->
         granted = ok
-        if (ok) onScan()
+        if (ok) onScan() else promptSuppressed = true
+    }
+
+    // Re-check on resume so granting via system Settings reflects immediately.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val now = ContextCompat.checkSelfPermission(context, permission) ==
+                    PackageManager.PERMISSION_GRANTED
+                if (now && !granted) onScan()
+                granted = now
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // Auto-scan when the tab opens with permission already granted, so the user
+    // doesn't have to guess that they need to tap Scan first.
+    LaunchedEffect(granted) {
+        if (granted && state.aps.isEmpty() && !state.scanning) onScan()
     }
 
     Column(
@@ -94,12 +143,28 @@ fun WifiScreen(
         }
 
         if (!granted) {
-            PermissionCard(onGrant = { launcher.launch(permission) })
+            PermissionCard(
+                permissionLabel = permissionLabel(permission),
+                promptSuppressed = promptSuppressed,
+                onGrant = { launcher.launch(permission) },
+                onOpenSettings = { openAppSettings(context) },
+            )
             return
         }
 
         state.current?.let { CurrentCard(it) }
         if (state.channelLoads.isNotEmpty()) CongestionCard(state.channelLoads)
+
+        if (state.scanning && state.aps.isEmpty()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                Text("Scanning nearby networks…",
+                    style = MaterialTheme.typography.bodyMedium)
+            }
+        }
 
         state.message?.let { msg ->
             Card(Modifier.fillMaxWidth()) {
@@ -125,17 +190,32 @@ fun WifiScreen(
 }
 
 @Composable
-private fun PermissionCard(onGrant: () -> Unit) {
+private fun PermissionCard(
+    permissionLabel: String,
+    promptSuppressed: Boolean,
+    onGrant: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Permission needed", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Android requires the nearby-WiFi (or location) permission to list " +
-                    "access points. This app never uses your location — scanning is " +
-                    "for network analysis only.",
+                "Listing WiFi networks needs the \"$permissionLabel\" permission. This " +
+                    "app never uses your location — scanning is for network analysis only.",
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Button(onClick = onGrant) { Text("Grant permission") }
+            if (promptSuppressed) {
+                Text(
+                    "Android won't show the prompt again once it's been dismissed. Open " +
+                        "app settings and enable \"$permissionLabel\" manually.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Button(onClick = onOpenSettings) { Text("Open app settings") }
+            } else {
+                Button(onClick = onGrant) { Text("Grant permission") }
+                OutlinedButton(onClick = onOpenSettings) { Text("Open app settings") }
+            }
         }
     }
 }
