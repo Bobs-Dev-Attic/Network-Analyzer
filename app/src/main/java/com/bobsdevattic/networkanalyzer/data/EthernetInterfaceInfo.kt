@@ -26,12 +26,23 @@ data class EthernetInterfaceInfo(
     val upstreamKbps: Int? = null,
     /** True once app process traffic is pinned to this interface. */
     val boundToProcess: Boolean = false,
+    /** Physical carrier (cable link) state for a DETECTED-but-unmanaged interface. */
+    val carrier: Boolean? = null,
+    /** Attached USB devices (vendor:product), for diagnosing enumeration. */
+    val usbDevices: List<String> = emptyList(),
 )
 
 enum class AdapterStatus {
     /** A TRANSPORT_ETHERNET network is present and inspected. */
     CONNECTED,
 
-    /** No Ethernet transport found — adapter unplugged, unsupported, or no link. */
+    /**
+     * A wired interface exists in the kernel (adapter recognized) but Android
+     * hasn't brought up an Ethernet network — usually no live cable, or the OS
+     * isn't managing the link yet.
+     */
+    DETECTED,
+
+    /** No wired interface found — adapter unplugged, OTG off, or unsupported chipset. */
     ABSENT,
 }

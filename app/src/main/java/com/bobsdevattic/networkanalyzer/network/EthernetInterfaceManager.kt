@@ -1,6 +1,7 @@
 package com.bobsdevattic.networkanalyzer.network
 
 import android.content.Context
+import android.hardware.usb.UsbManager
 import android.net.ConnectivityManager
 import android.net.LinkAddress
 import android.net.LinkProperties
@@ -9,6 +10,7 @@ import android.net.NetworkCapabilities
 import android.net.RouteInfo
 import com.bobsdevattic.networkanalyzer.data.AdapterStatus
 import com.bobsdevattic.networkanalyzer.data.EthernetInterfaceInfo
+import java.io.File
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.NetworkInterface
@@ -22,6 +24,7 @@ import java.net.NetworkInterface
  */
 class EthernetInterfaceManager(context: Context) {
 
+    private val appContext = context.applicationContext
     private val cm =
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
@@ -43,7 +46,7 @@ class EthernetInterfaceManager(context: Context) {
      */
     fun inspect(): EthernetInterfaceInfo {
         val network = findEthernetNetwork()
-            ?: return EthernetInterfaceInfo(status = AdapterStatus.ABSENT)
+            ?: return inspectWithoutNetwork()
 
         val link: LinkProperties? = cm.getLinkProperties(network)
         val caps: NetworkCapabilities? = cm.getNetworkCapabilities(network)
@@ -85,6 +88,53 @@ class EthernetInterfaceManager(context: Context) {
     }
 
     /**
+     * No managed Ethernet network — dig deeper for diagnostics. If a wired
+     * interface exists in sysfs the adapter is recognized (DETECTED), and its
+     * carrier tells us whether a live cable is attached. Otherwise report the
+     * attached USB devices so the user can see whether the adapter enumerated
+     * on USB at all (ABSENT).
+     */
+    private fun inspectWithoutNetwork(): EthernetInterfaceInfo {
+        val usb = attachedUsbDevices()
+        val iface = findCandidateInterface()
+            ?: return EthernetInterfaceInfo(status = AdapterStatus.ABSENT, usbDevices = usb)
+
+        return EthernetInterfaceInfo(
+            status = AdapterStatus.DETECTED,
+            interfaceName = iface,
+            carrier = readCarrier(iface),
+            linkSpeedMbps = LinkStatsReader.readSpeedMbps(iface),
+            macAddress = readMac(iface),
+            mtu = readMtu(iface),
+            usbDevices = usb,
+        )
+    }
+
+    /** A plausible wired interface from sysfs (eth*/usb*/rndis*), or null. */
+    private fun findCandidateInterface(): String? = runCatching {
+        File(SYS_NET).list()?.firstOrNull { name ->
+            name != "lo" &&
+                (name.startsWith("eth") || name.startsWith("usb") || name.startsWith("rndis"))
+        }
+    }.getOrNull()
+
+    /** Physical link (carrier) state; null when the file isn't readable/valid. */
+    private fun readCarrier(iface: String): Boolean? = runCatching {
+        val f = File("$SYS_NET/$iface/carrier")
+        if (f.canRead()) f.readText().trim() == "1" else null
+    }.getOrNull()
+
+    /** Attached USB devices as "name (vvvv:pppp)" — no permission needed to list. */
+    private fun attachedUsbDevices(): List<String> = runCatching {
+        val usb = appContext.getSystemService(Context.USB_SERVICE) as? UsbManager
+            ?: return emptyList()
+        usb.deviceList.values.map { d ->
+            val id = "%04x:%04x".format(d.vendorId, d.productId)
+            d.productName?.takeIf { it.isNotBlank() }?.let { "$it ($id)" } ?: id
+        }
+    }.getOrDefault(emptyList())
+
+    /**
      * Pin this app process's sockets to the Ethernet network so that discovery,
      * scans, and speed tests traverse the wire rather than WiFi/cellular.
      * Returns true on success.
@@ -120,6 +170,10 @@ class EthernetInterfaceManager(context: Context) {
         return runCatching {
             NetworkInterface.getByName(interfaceName)?.mtu?.takeIf { it > 0 }
         }.getOrNull()
+    }
+
+    private companion object {
+        const val SYS_NET = "/sys/class/net"
     }
 }
 
