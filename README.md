@@ -92,9 +92,12 @@ no per-pin fault location.
 
 **M1 — Interface & link info** ✅ _implemented_
 Detect the USB Ethernet interface, show link speed/duplex/MAC and IP config,
-bind app traffic to it. Warn on unsupported/absent adapter. Also shows a **WiFi
-signal readout** (network, dBm + bars, link speed, channel) for the connected
-network, refreshed with the snapshot.
+bind app traffic to it. Warn on unsupported/absent adapter. Detection is
+**diagnostic**: distinguishes a managed link (Connected) from an interface that
+exists in sysfs but has no network yet (Detected — usually no live cable, shows
+carrier state) from nothing at all (Absent — then lists attached USB devices to
+show whether the adapter enumerated on USB). Also shows a **WiFi signal readout**
+(network, dBm + bars, link speed, channel) for the connected network.
 _Unrooted-only for v1 (decided): public ConnectivityManager APIs + world-readable
 sysfs; no raw sockets or privileged calls._
 

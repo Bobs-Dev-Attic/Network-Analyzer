@@ -57,16 +57,19 @@ fun InterfaceScreen(
                 style = MaterialTheme.typography.headlineSmall,
             )
             // ABSENT is neutral, not bad: an unplugged adapter is a normal state, and
-            // a red error chip would overstate it.
+            // a red error chip would overstate it. DETECTED (recognized but no link)
+            // is actionable, so it warns.
             when (info.status) {
                 AdapterStatus.CONNECTED -> StatusChip("connected", Status.GOOD)
+                AdapterStatus.DETECTED -> StatusChip("no link", Status.WARN)
                 AdapterStatus.ABSENT -> StatusChip("no adapter", Status.NEUTRAL)
             }
         }
 
         when (info.status) {
-            AdapterStatus.ABSENT -> AbsentCard()
             AdapterStatus.CONNECTED -> ConnectedCards(info)
+            AdapterStatus.DETECTED -> DetectedCard(info)
+            AdapterStatus.ABSENT -> AbsentCard(info)
         }
 
         wifi?.let { WifiCard(it) }
@@ -94,7 +97,7 @@ fun InterfaceScreen(
 }
 
 @Composable
-private fun AbsentCard() {
+private fun AbsentCard(info: EthernetInterfaceInfo) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("No Ethernet adapter detected", style = MaterialTheme.typography.titleMedium)
@@ -102,6 +105,58 @@ private fun AbsentCard() {
                 "Plug in a USB-C Ethernet adapter with a live cable. Realtek " +
                     "(RTL8153/8156) and ASIX (AX88179) chipsets are best supported; " +
                     "some off-brand adapters won't enumerate on Android.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            if (info.usbDevices.isNotEmpty()) {
+                Text("USB devices seen:", style = MaterialTheme.typography.labelLarge)
+                info.usbDevices.forEach {
+                    Text("• $it", style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace)
+                }
+                Text(
+                    "A USB device is attached but no Ethernet interface came up — the " +
+                        "chipset may be unsupported, or the adapter needs more power than " +
+                        "the phone provides.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Text(
+                    "No USB device is being seen at all. Enable USB-OTG in system settings " +
+                        "(it's often off or times out), reseat the adapter, and try flipping " +
+                        "the USB-C plug.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetectedCard(info: EthernetInterfaceInfo) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Adapter detected", style = MaterialTheme.typography.titleMedium)
+            InfoRow("Interface", info.interfaceName)
+            InfoRow(
+                "Carrier",
+                when (info.carrier) {
+                    true -> "up"
+                    false -> "down (no cable link)"
+                    null -> "unknown"
+                },
+            )
+            info.macAddress?.let { InfoRow("MAC", it) }
+            Text(
+                if (info.carrier == false) {
+                    "The adapter is recognized but there's no cable link — connect a live " +
+                        "Ethernet cable to the adapter, then tap Refresh."
+                } else {
+                    "The adapter is recognized but Android hasn't assigned it a network " +
+                        "yet. Make sure the cable is live; you can also check Settings → " +
+                        "Network & internet → Ethernet."
+                },
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
