@@ -57,9 +57,11 @@ fun InterfaceScreen(
                 style = MaterialTheme.typography.headlineSmall,
             )
             // ABSENT is neutral, not bad: an unplugged adapter is a normal state, and
-            // a red error chip would overstate it.
+            // a red error chip would overstate it. DETECTED (recognized but no link)
+            // is actionable, so it warns.
             when (info.status) {
                 AdapterStatus.CONNECTED -> StatusChip("connected", Status.GOOD)
+                AdapterStatus.DETECTED -> StatusChip("no link", Status.WARN)
                 AdapterStatus.ABSENT -> StatusChip("no adapter", Status.NEUTRAL)
             }
         }
