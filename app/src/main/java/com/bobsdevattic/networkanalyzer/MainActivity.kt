@@ -22,6 +22,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bobsdevattic.networkanalyzer.ui.DiscoveryScreen
 import com.bobsdevattic.networkanalyzer.ui.DiscoveryViewModel
+import com.bobsdevattic.networkanalyzer.ui.HeatmapScreen
+import com.bobsdevattic.networkanalyzer.ui.HeatmapViewModel
 import com.bobsdevattic.networkanalyzer.ui.InterfaceScreen
 import com.bobsdevattic.networkanalyzer.ui.InterfaceViewModel
 import com.bobsdevattic.networkanalyzer.ui.PortScanScreen
@@ -59,6 +61,7 @@ private enum class Screen(val label: String) {
     Ports("Ports"),
     Speed("Speed"),
     Wifi("WiFi"),
+    Map("Map"),
     Cable("Cable"),
     Settings("Settings"),
 }
@@ -71,6 +74,7 @@ private fun AnalyzerApp(settingsVm: SettingsViewModel) {
     val portScanVm: PortScanViewModel = viewModel()
     val speedVm: SpeedQualityViewModel = viewModel()
     val wifiVm: WifiViewModel = viewModel()
+    val heatmapVm: HeatmapViewModel = viewModel()
     val qualVm: QualificationViewModel = viewModel()
 
     val info by interfaceVm.state.collectAsStateWithLifecycle()
@@ -80,6 +84,7 @@ private fun AnalyzerApp(settingsVm: SettingsViewModel) {
     val portScan by portScanVm.state.collectAsStateWithLifecycle()
     val speed by speedVm.state.collectAsStateWithLifecycle()
     val wifi by wifiVm.state.collectAsStateWithLifecycle()
+    val heatmap by heatmapVm.state.collectAsStateWithLifecycle()
     val qual by qualVm.state.collectAsStateWithLifecycle()
     val themeMode by settingsVm.themeMode.collectAsStateWithLifecycle()
 
@@ -89,6 +94,11 @@ private fun AnalyzerApp(settingsVm: SettingsViewModel) {
 
     var selected by remember { mutableIntStateOf(0) }
     val screens = Screen.entries
+
+    // Only poll the WiFi signal for the map while its tab is showing.
+    androidx.compose.runtime.LaunchedEffect(screens[selected]) {
+        if (screens[selected] == Screen.Map) heatmapVm.start() else heatmapVm.stop()
+    }
 
     Scaffold { innerPadding ->
         Column(Modifier.fillMaxSize().padding(innerPadding)) {
@@ -137,6 +147,12 @@ private fun AnalyzerApp(settingsVm: SettingsViewModel) {
                     onToggleLive = wifiVm::setLiveEnabled,
                     onSetInterval = wifiVm::setInterval,
                     onSetSort = wifiVm::setSort,
+                )
+                Screen.Map -> HeatmapScreen(
+                    state = heatmap,
+                    onAddSample = heatmapVm::addSample,
+                    onUndo = heatmapVm::undo,
+                    onClear = heatmapVm::clear,
                 )
                 Screen.Cable -> QualificationScreen(
                     state = qual,
