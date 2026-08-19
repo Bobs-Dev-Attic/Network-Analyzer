@@ -150,7 +150,10 @@ private fun AnalyzerApp(settingsVm: SettingsViewModel) {
                 )
                 Screen.Map -> HeatmapScreen(
                     state = heatmap,
-                    onAddSample = heatmapVm::addSample,
+                    onSetMode = heatmapVm::setMode,
+                    onAddGridSample = heatmapVm::addGridSample,
+                    onArPose = heatmapVm::recordArPose,
+                    onTracking = heatmapVm::setTracking,
                     onUndo = heatmapVm::undo,
                     onClear = heatmapVm::clear,
                 )

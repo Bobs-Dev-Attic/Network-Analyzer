@@ -28,6 +28,14 @@
         android:name="android.hardware.usb.host"
         android:required="false" />
 
+    <!--
+      AR survey mode (Map tab): the camera provides motion tracking (ARCore) to
+      auto-position signal samples as you walk. Both are OPTIONAL so the app still
+      installs and runs (grid mode) on devices without a camera or ARCore.
+    -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera.ar" android:required="false" />
+
     <application
         android:allowBackup="true"
         android:label="@string/app_name"
@@ -44,6 +52,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- ARCore is optional: the app installs without it and falls back to grid mode. -->
+        <meta-data android:name="com.google.ar.core" android:value="optional" />
     </application>
 
 </manifest>
