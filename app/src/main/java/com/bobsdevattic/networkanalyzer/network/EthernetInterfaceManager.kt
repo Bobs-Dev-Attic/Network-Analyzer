@@ -28,12 +28,25 @@ class EthernetInterfaceManager(context: Context) {
     private val cm =
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
-    /** The first network advertising the Ethernet transport, if any. */
-    fun findEthernetNetwork(): Network? =
-        cm.allNetworks.firstOrNull { network ->
-            cm.getNetworkCapabilities(network)
+    /**
+     * The managed wired network. Prefer a real TRANSPORT_ETHERNET network; if none
+     * is tagged that way (some OEMs, e.g. Samsung, don't), fall back to any network
+     * whose interface name looks wired (eth*/usb*/rndis*) so we still get its full
+     * LinkProperties (gateway/DNS) and can bind to it.
+     */
+    fun findEthernetNetwork(): Network? {
+        val networks = cm.allNetworks
+        networks.firstOrNull {
+            cm.getNetworkCapabilities(it)
                 ?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true
+        }?.let { return it }
+        return networks.firstOrNull { network ->
+            cm.getLinkProperties(network)?.interfaceName?.let { isWiredName(it) } == true
         }
+    }
+
+    private fun isWiredName(name: String): Boolean =
+        name.startsWith("eth") || name.startsWith("usb") || name.startsWith("rndis")
 
     /** Kernel interface name of the current Ethernet link (e.g. "eth0"), or null. */
     fun currentInterfaceName(): String? =
@@ -88,34 +101,58 @@ class EthernetInterfaceManager(context: Context) {
     }
 
     /**
-     * No managed Ethernet network — dig deeper for diagnostics. If a wired
-     * interface exists in sysfs the adapter is recognized (DETECTED), and its
-     * carrier tells us whether a live cable is attached. Otherwise report the
-     * attached USB devices so the user can see whether the adapter enumerated
-     * on USB at all (ABSENT).
+     * No managed Ethernet network from ConnectivityManager — enumerate raw
+     * interfaces instead (apps can read [NetworkInterface] even when sysfs listing
+     * and the CM transport are unavailable, which is the Samsung/Android-16 case).
+     * A wired interface with an IPv4 is effectively CONNECTED (shown with degraded
+     * data: no gateway/DNS/bind without a managed network); one without an address
+     * is DETECTED. If there's no wired interface at all, report attached USB
+     * devices so the user can see whether the adapter enumerated on USB (ABSENT).
      */
     private fun inspectWithoutNetwork(): EthernetInterfaceInfo {
         val usb = attachedUsbDevices()
-        val iface = findCandidateInterface()
+        val ni = findWiredInterface()
             ?: return EthernetInterfaceInfo(status = AdapterStatus.ABSENT, usbDevices = usb)
 
+        val name = ni.name
+        val ipv4 = mutableListOf<String>()
+        val ipv6 = mutableListOf<String>()
+        runCatching {
+            ni.interfaceAddresses.forEach { ia ->
+                val addr = ia.address ?: return@forEach
+                val withPrefix = "${addr.hostAddress}/${ia.networkPrefixLength}"
+                when (addr) {
+                    is Inet4Address -> ipv4 += withPrefix
+                    is Inet6Address -> ipv6 += withPrefix
+                }
+            }
+        }
+        val up = runCatching { ni.isUp }.getOrDefault(false)
+
         return EthernetInterfaceInfo(
-            status = AdapterStatus.DETECTED,
-            interfaceName = iface,
-            carrier = readCarrier(iface),
-            linkSpeedMbps = LinkStatsReader.readSpeedMbps(iface),
-            macAddress = readMac(iface),
-            mtu = readMtu(iface),
+            status = if (ipv4.isNotEmpty()) AdapterStatus.CONNECTED else AdapterStatus.DETECTED,
+            interfaceName = name,
+            linkSpeedMbps = LinkStatsReader.readSpeedMbps(name),
+            duplex = LinkStatsReader.readDuplex(name),
+            macAddress = macOf(ni),
+            mtu = runCatching { ni.mtu.takeIf { it > 0 } }.getOrNull(),
+            ipv4Addresses = ipv4,
+            ipv6Addresses = ipv6,
+            carrier = readCarrier(name) ?: up,
             usbDevices = usb,
         )
     }
 
-    /** A plausible wired interface from sysfs (eth*/usb*/rndis*), or null. */
-    private fun findCandidateInterface(): String? = runCatching {
-        File(SYS_NET).list()?.firstOrNull { name ->
-            name != "lo" &&
-                (name.startsWith("eth") || name.startsWith("usb") || name.startsWith("rndis"))
+    /** First wired interface (eth*/usb*/rndis*) visible via NetworkInterface, or null. */
+    private fun findWiredInterface(): NetworkInterface? = runCatching {
+        NetworkInterface.getNetworkInterfaces()?.toList().orEmpty().firstOrNull { ni ->
+            val name = ni.name.orEmpty()
+            isWiredName(name) && runCatching { !ni.isLoopback }.getOrDefault(true)
         }
+    }.getOrNull()
+
+    private fun macOf(ni: NetworkInterface): String? = runCatching {
+        ni.hardwareAddress?.joinToString(":") { "%02X".format(it) }
     }.getOrNull()
 
     /** Physical link (carrier) state; null when the file isn't readable/valid. */
