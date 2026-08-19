@@ -52,5 +52,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.2")
     implementation("androidx.core:core-ktx:1.13.1")
 
+    // AR survey mode (camera auto-positioning): Compose-friendly ARCore wrapper.
+    implementation("io.github.sceneview:arsceneview:2.2.1")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
