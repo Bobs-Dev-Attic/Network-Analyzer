@@ -28,11 +28,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -59,6 +62,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.bobsdevattic.networkanalyzer.network.ChannelLoad
 import com.bobsdevattic.networkanalyzer.network.CurrentWifi
 import com.bobsdevattic.networkanalyzer.network.WifiAp
+import com.bobsdevattic.networkanalyzer.network.WifiSort
 import com.bobsdevattic.networkanalyzer.network.WifiState
 import com.bobsdevattic.networkanalyzer.ui.theme.BandChip
 import com.bobsdevattic.networkanalyzer.ui.theme.SignalBars
@@ -108,6 +112,7 @@ fun WifiScreen(
     onScan: () -> Unit,
     onToggleLive: (Boolean) -> Unit,
     onSetInterval: (Long) -> Unit,
+    onSetSort: (WifiSort) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -207,9 +212,16 @@ fun WifiScreen(
         }
 
         if (state.aps.isNotEmpty()) {
-            Text("${state.aps.size} networks",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("${state.aps.size} networks",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SortMenu(state.sortMode, onSetSort)
+            }
         }
 
         LazyColumn(
@@ -218,6 +230,27 @@ fun WifiScreen(
         ) {
             items(state.aps, key = { it.bssid.ifBlank { it.ssid + it.channel } }) { ap ->
                 ApCard(ap)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SortMenu(current: WifiSort, onSetSort: (WifiSort) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { open = true }) {
+            Text("Sort: ${current.label}")
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            WifiSort.entries.forEach { mode ->
+                DropdownMenuItem(
+                    text = { Text(mode.label) },
+                    onClick = { onSetSort(mode); open = false },
+                    trailingIcon = if (mode == current) {
+                        { Text("✓", color = MaterialTheme.colorScheme.primary) }
+                    } else null,
+                )
             }
         }
     }

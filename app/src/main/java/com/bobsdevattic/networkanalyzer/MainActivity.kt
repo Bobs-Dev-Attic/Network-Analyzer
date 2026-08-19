@@ -136,6 +136,7 @@ private fun AnalyzerApp(settingsVm: SettingsViewModel) {
                     onScan = wifiVm::scan,
                     onToggleLive = wifiVm::setLiveEnabled,
                     onSetInterval = wifiVm::setInterval,
+                    onSetSort = wifiVm::setSort,
                 )
                 Screen.Cable -> QualificationScreen(
                     state = qual,
