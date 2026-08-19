@@ -49,6 +49,14 @@ data class ChannelLoad(
     val count: Int,
 )
 
+/** Sort order for the networks list. */
+enum class WifiSort(val label: String) {
+    SIGNAL("Signal (strongest)"),
+    NAME("Name (A–Z)"),
+    SECURITY("Security"),
+    CHANNEL("Channel"),
+}
+
 /** UI-facing state for the WiFi screen. */
 data class WifiState(
     val scanning: Boolean = false,
@@ -60,4 +68,6 @@ data class WifiState(
     val liveEnabled: Boolean = false,
     val intervalMs: Long = 1000L,
     val rssiHistory: List<Int> = emptyList(),
+    /** Persisted sort order for [aps]. */
+    val sortMode: WifiSort = WifiSort.SIGNAL,
 )

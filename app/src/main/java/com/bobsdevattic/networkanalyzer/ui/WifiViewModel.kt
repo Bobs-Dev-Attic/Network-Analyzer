@@ -13,7 +13,9 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.bobsdevattic.networkanalyzer.network.ChannelLoad
+import com.bobsdevattic.networkanalyzer.network.WifiAp
 import com.bobsdevattic.networkanalyzer.network.WifiScanner
+import com.bobsdevattic.networkanalyzer.network.WifiSort
 import com.bobsdevattic.networkanalyzer.network.WifiState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -37,8 +39,9 @@ import kotlinx.coroutines.launch
 class WifiViewModel(app: Application) : AndroidViewModel(app) {
 
     private val scanner = WifiScanner(app)
+    private val prefs = app.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
-    private val _state = MutableStateFlow(WifiState())
+    private val _state = MutableStateFlow(WifiState(sortMode = readSort()))
     val state: StateFlow<WifiState> = _state.asStateFlow()
 
     private var finalizeJob: Job? = null
@@ -91,6 +94,25 @@ class WifiViewModel(app: Application) : AndroidViewModel(app) {
     /** Re-read/scan (e.g. once the permission was just granted). */
     fun refresh() = scan()
 
+    /** Change the networks-list sort order; persists and re-sorts immediately. */
+    fun setSort(mode: WifiSort) {
+        prefs.edit().putString(KEY_SORT, mode.name).apply()
+        _state.update { it.copy(sortMode = mode, aps = sortAps(it.aps, mode)) }
+    }
+
+    private fun sortAps(aps: List<WifiAp>, mode: WifiSort): List<WifiAp> = when (mode) {
+        WifiSort.SIGNAL -> aps.sortedByDescending { it.rssiDbm }
+        WifiSort.NAME -> aps.sortedWith(compareBy({ it.ssid.lowercase() }, { -it.rssiDbm }))
+        WifiSort.SECURITY -> aps.sortedWith(compareBy({ it.security }, { -it.rssiDbm }))
+        WifiSort.CHANNEL ->
+            aps.sortedWith(compareBy({ it.band.ordinal }, { it.channel }, { -it.rssiDbm }))
+    }
+
+    private fun readSort(): WifiSort =
+        prefs.getString(KEY_SORT, null)
+            ?.let { runCatching { WifiSort.valueOf(it) }.getOrNull() }
+            ?: WifiSort.SIGNAL
+
     private fun load(finalize: Boolean, scanStarted: Boolean = true) {
         if (!scanner.isWifiEnabled) {
             finalizeJob?.cancel()
@@ -102,8 +124,7 @@ class WifiViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         val current = scanner.current()
-        val aps = scanner.accessPoints(current?.bssid)
-            .sortedByDescending { it.rssiDbm }
+        val aps = sortAps(scanner.accessPoints(current?.bssid), _state.value.sortMode)
 
         if (aps.isNotEmpty()) {
             finalizeJob?.cancel()
@@ -218,5 +239,6 @@ class WifiViewModel(app: Application) : AndroidViewModel(app) {
         const val SCAN_MAX_WAIT_MS = 16000L
         /** Samples kept for the live-signal sparkline. */
         const val RSSI_HISTORY = 60
+        const val KEY_SORT = "wifi_sort"
     }
 }
